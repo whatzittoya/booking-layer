@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// Redirect to setup wizard if Composer dependencies are missing.
+if (!file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
+    header('Location: setup.php');
+    exit;
+}
+
 use App\Middleware\SessionMiddleware;
 use DI\Bridge\Slim\Bridge;
 use Dotenv\Dotenv;
