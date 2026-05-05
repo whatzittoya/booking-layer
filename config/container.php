@@ -25,7 +25,7 @@ $builder->addDefinitions([
     'settings' => [
         'app' => [
             'header_label' => 'Restaurant Portal',
-            'name' => $_ENV['APP_NAME'] ?? 'Quinos - Cloudbeds',
+            'name' => $_ENV['APP_NAME'] ?? 'Quinos - Booking Layer',
             'header_title' => $_ENV['APP_NAME'] ?? 'Restaurant Portal',
             'base_path' => rtrim($_ENV['APP_BASE_PATH'] ?? '', '/'),
             'debug' => filter_var($_ENV['APP_DEBUG'] ?? true, FILTER_VALIDATE_BOOL),
@@ -38,9 +38,9 @@ $builder->addDefinitions([
             'password' => $_ENV['DB_PASSWORD'] ?? '',
             'charset' => $_ENV['DB_CHARSET'] ?? 'utf8',
         ],
-        'cloudbeds' => [
-            'base_url' => rtrim($_ENV['CLOUDBEDS_BASE_URL'] ?? 'https://api.cloudbeds.com/api/v1.3', '/'),
-            'reservation_status' => $_ENV['CLOUDBEDS_RESERVATION_STATUS'] ?? 'checked_in',
+        'bookinglayer' => [
+            'base_url' => rtrim($_ENV['BOOKINGLAYER_BASE_URL'] ?? 'http://api.bookinglayer.io/private', '/'),
+            'reservation_status' => $_ENV['BOOKINGLAYER_RESERVATION_STATUS'] ?? 'confirmed',
         ],
         'paths' => [
             'root' => $rootPath,
@@ -95,12 +95,12 @@ $builder->addDefinitions([
     SchedulerService::class => static function (ContainerInterface $container): SchedulerService {
         $root = $container->get('settings')['paths']['root'];
 
-        return new SchedulerService($root . '/bin/pull_reservations.php', $root, 'quinos:pull_reservations');
+        return new SchedulerService($root . '/bin/pull_reservations.php', $root, 'bookinglayer:pull_reservations');
     },
     'scheduler.payments' => static function (ContainerInterface $container): SchedulerService {
         $root = $container->get('settings')['paths']['root'];
 
-        return new SchedulerService($root . '/bin/send_payments.php', $root, 'quinos:send_payments');
+        return new SchedulerService($root . '/bin/send_payments.php', $root, 'bookinglayer:send_payments');
     },
     AccessToken::class => DI\autowire(AccessToken::class),
     Customer::class => DI\autowire(Customer::class),

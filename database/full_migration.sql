@@ -26,94 +26,6 @@ PREPARE add_access_token_item_id_statement FROM @add_access_token_item_id;
 EXECUTE add_access_token_item_id_statement;
 DEALLOCATE PREPARE add_access_token_item_id_statement;
 
-CREATE TABLE IF NOT EXISTS `tbl_reservation_cloudbed` (
-    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `property_id` VARCHAR(32) NOT NULL,
-    `reservation_id` VARCHAR(32) NOT NULL,
-    `date_created` DATETIME NOT NULL,
-    `date_modified` DATETIME NOT NULL,
-    `status` VARCHAR(50) NOT NULL,
-    `guest_id` VARCHAR(32) NOT NULL,
-    `profile_id` VARCHAR(32) NOT NULL,
-    `guest_name` VARCHAR(255) NOT NULL,
-    `start_date` DATE NOT NULL,
-    `end_date` DATE NOT NULL,
-    `adults` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    `children` TINYINT UNSIGNED NOT NULL DEFAULT 0,
-    `balance` BIGINT NOT NULL DEFAULT 0,
-    `source_id` VARCHAR(50) NOT NULL,
-    `source_name` VARCHAR(100) NOT NULL,
-    `room_type_name` VARCHAR(255) DEFAULT NULL,
-    `room_name` VARCHAR(255) DEFAULT NULL,
-    `third_party_identifier` VARCHAR(255) DEFAULT NULL,
-    `allotment_block_code` VARCHAR(100) DEFAULT NULL,
-    `group_code` VARCHAR(100) DEFAULT NULL,
-    `origin` VARCHAR(100) DEFAULT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uniq_reservation_reservation_id` (`reservation_id`),
-    KEY `idx_reservation_property_id` (`property_id`),
-    KEY `idx_reservation_guest_id` (`guest_id`),
-    KEY `idx_reservation_profile_id` (`profile_id`),
-    KEY `idx_reservation_start_date` (`start_date`),
-    KEY `idx_reservation_end_date` (`end_date`),
-    KEY `idx_reservation_room_name` (`room_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
-
-SET @reservation_room_type_exists := (
-    SELECT COUNT(*)
-    FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'tbl_reservation_cloudbed'
-      AND COLUMN_NAME = 'room_type_name'
-);
-
-SET @add_reservation_room_type := IF(
-    @reservation_room_type_exists = 0,
-    'ALTER TABLE `tbl_reservation_cloudbed` ADD COLUMN `room_type_name` VARCHAR(255) NULL AFTER `source_name`',
-    'SELECT 1'
-);
-
-PREPARE add_reservation_room_type_statement FROM @add_reservation_room_type;
-EXECUTE add_reservation_room_type_statement;
-DEALLOCATE PREPARE add_reservation_room_type_statement;
-
-SET @reservation_room_name_exists := (
-    SELECT COUNT(*)
-    FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'tbl_reservation_cloudbed'
-      AND COLUMN_NAME = 'room_name'
-);
-
-SET @add_reservation_room_name := IF(
-    @reservation_room_name_exists = 0,
-    'ALTER TABLE `tbl_reservation_cloudbed` ADD COLUMN `room_name` VARCHAR(255) NULL AFTER `room_type_name`',
-    'SELECT 1'
-);
-
-PREPARE add_reservation_room_name_statement FROM @add_reservation_room_name;
-EXECUTE add_reservation_room_name_statement;
-DEALLOCATE PREPARE add_reservation_room_name_statement;
-
-SET @reservation_room_name_index_exists := (
-    SELECT COUNT(*)
-    FROM information_schema.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'tbl_reservation_cloudbed'
-      AND INDEX_NAME = 'idx_reservation_room_name'
-);
-
-SET @add_reservation_room_name_index := IF(
-    @reservation_room_name_index_exists = 0,
-    'ALTER TABLE `tbl_reservation_cloudbed` ADD KEY `idx_reservation_room_name` (`room_name`)',
-    'SELECT 1'
-);
-
-PREPARE add_reservation_room_name_index_statement FROM @add_reservation_room_name_index;
-EXECUTE add_reservation_room_name_index_statement;
-DEALLOCATE PREPARE add_reservation_room_name_index_statement;
 
 SET @customer_reservation_id_exists := (
     SELECT COUNT(*)
@@ -169,3 +81,29 @@ SET @drop_customer_reservation_id_unique := IF(
 PREPARE drop_customer_reservation_id_unique_statement FROM @drop_customer_reservation_id_unique;
 EXECUTE drop_customer_reservation_id_unique_statement;
 DEALLOCATE PREPARE drop_customer_reservation_id_unique_statement;
+
+CREATE TABLE IF NOT EXISTS `tbl_reservation_b_layer` (
+    `id` VARCHAR(36) NOT NULL,
+    `reference` VARCHAR(50) NOT NULL DEFAULT '',
+    `starts_at` DATETIME NOT NULL,
+    `ends_at` DATETIME NOT NULL,
+    `status` VARCHAR(50) NOT NULL DEFAULT '',
+    `booker_id` VARCHAR(36) NOT NULL DEFAULT '',
+    `guest` VARCHAR(255) NOT NULL DEFAULT '',
+    `guest_gender` VARCHAR(20) NOT NULL DEFAULT '',
+    `guest_age` INT UNSIGNED NULL DEFAULT NULL,
+    `guest_email` VARCHAR(255) NOT NULL DEFAULT '',
+    `final_price_excl_tax` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    `final_price_incl_tax` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+    `duration_in_days` INT UNSIGNED NOT NULL DEFAULT 0,
+    `duration_in_nights` INT UNSIGNED NOT NULL DEFAULT 0,
+    `product` TEXT NULL DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_b_layer_status` (`status`),
+    KEY `idx_b_layer_booker_id` (`booker_id`),
+    KEY `idx_b_layer_starts_at` (`starts_at`),
+    KEY `idx_b_layer_ends_at` (`ends_at`),
+    KEY `idx_b_layer_reference` (`reference`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

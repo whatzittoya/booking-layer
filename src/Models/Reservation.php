@@ -16,7 +16,7 @@ class Reservation
     {
         $statement = $this->pdo->query(
             'SELECT MAX(updated_at) AS latest_pulled_at
-             FROM tbl_reservation_cloudbed'
+             FROM tbl_reservation_b_layer'
         );
 
         $row = $statement->fetch();
@@ -28,32 +28,31 @@ class Reservation
     public function customerCandidates(string $search = ''): array
     {
         $sql = 'SELECT
-                    r.reservation_id,
-                    r.guest_name,
+                    r.id AS reservation_id,
+                    r.reference,
+                    r.guest,
                     r.status,
-                    r.start_date,
-                    r.end_date,
-                    r.source_name,
-                    r.room_type_name,
-                    r.room_name,
+                    r.starts_at,
+                    r.ends_at,
+                    r.product,
                     CASE
                         WHEN EXISTS (
                             SELECT 1
                             FROM tbl_customers c
-                            WHERE c.reservation_id = r.reservation_id
+                            WHERE c.reservation_id = r.id
                               AND CAST(c.active AS UNSIGNED) = 1
                         ) THEN 1
                         ELSE 0
                     END AS customer_added
-                FROM tbl_reservation_cloudbed r';
+                FROM tbl_reservation_b_layer r';
         $parameters = [];
 
         if ($search !== '') {
-            $sql .= ' WHERE r.guest_name LIKE :search';
+            $sql .= ' WHERE r.guest LIKE :search';
             $parameters['search'] = '%' . $search . '%';
         }
 
-        $sql .= ' ORDER BY r.date_modified DESC, r.start_date DESC LIMIT 100';
+        $sql .= ' ORDER BY r.updated_at DESC, r.starts_at DESC LIMIT 100';
 
         $statement = $this->pdo->prepare($sql);
         $statement->execute($parameters);
@@ -65,35 +64,27 @@ class Reservation
     {
         $statement = $this->pdo->prepare(
             'SELECT
-                reservation_id,
-                guest_name,
+                id AS reservation_id,
+                reference,
+                guest,
+                guest_gender,
+                guest_age,
+                guest_email,
                 status,
-                start_date,
-                end_date,
-                adults,
-                children,
-                balance,
-                source_id,
-                source_name,
-                room_type_name,
-                room_name,
-                guest_id,
-                profile_id,
-                property_id,
-                date_created,
-                date_modified,
-                third_party_identifier,
-                allotment_block_code,
-                group_code,
-                origin
-             FROM tbl_reservation_cloudbed
-             WHERE reservation_id = :reservation_id
+                starts_at,
+                ends_at,
+                final_price_excl_tax,
+                final_price_incl_tax,
+                duration_in_days,
+                duration_in_nights,
+                product,
+                booker_id
+             FROM tbl_reservation_b_layer
+             WHERE id = :id
              LIMIT 1'
         );
 
-        $statement->execute([
-            'reservation_id' => $reservationId,
-        ]);
+        $statement->execute(['id' => $reservationId]);
 
         $detail = $statement->fetch();
 
@@ -104,132 +95,142 @@ class Reservation
     {
         $statement = $this->pdo->query(
             'SELECT
-                r.reservation_id,
-                r.guest_name,
+                r.id AS reservation_id,
+                r.reference,
+                r.guest,
                 r.status,
-                r.start_date,
-                r.end_date,
-                r.room_type_name,
-                r.room_name,
+                r.starts_at,
+                r.ends_at,
+                r.product,
                 CASE
                     WHEN EXISTS (
                         SELECT 1
                         FROM tbl_customers c
-                        WHERE c.reservation_id = r.reservation_id
+                        WHERE c.reservation_id = r.id
                           AND CAST(c.active AS UNSIGNED) = 1
                     ) THEN 1
                     ELSE 0
                 END AS customer_added
-             FROM tbl_reservation_cloudbed r
-             ORDER BY start_date DESC, date_modified DESC'
+             FROM tbl_reservation_b_layer r
+             ORDER BY r.starts_at DESC, r.updated_at DESC'
         );
 
         return $statement->fetchAll();
     }
 
+    /**
+     * Each item in $reservations must be a raw Booking Layer booking object
+     * with an optional '_products' key (array of backoffice_title strings)
+     * already merged in by the caller.
+     */
     public function upsertMany(array $reservations): int
     {
         if ($reservations === []) {
             return 0;
         }
 
-        $reservationIds = array_values(array_filter(
-            array_map(fn ($r) => (string) ($r['reservationID'] ?? ''), $reservations),
-            fn ($id) => $id !== '',
+        $ids = array_values(array_filter(
+            array_map(fn($r) => (string) ($r['id'] ?? ''), $reservations),
+            fn($id) => $id !== '',
         ));
 
-        $placeholders = implode(',', array_fill(0, count($reservationIds), '?'));
-        $deleteStmt = $this->pdo->prepare(
-            "DELETE FROM tbl_reservation_cloudbed WHERE reservation_id IN ($placeholders)"
-        );
-
         $statement = $this->pdo->prepare(
-            'INSERT INTO tbl_reservation_cloudbed (
-                property_id,
-                reservation_id,
-                date_created,
-                date_modified,
+            'INSERT INTO tbl_reservation_b_layer (
+                id,
+                reference,
+                starts_at,
+                ends_at,
                 status,
-                guest_id,
-                profile_id,
-                guest_name,
-                start_date,
-                end_date,
-                adults,
-                children,
-                balance,
-                source_id,
-                source_name,
-                room_type_name,
-                room_name,
-                third_party_identifier,
-                allotment_block_code,
-                group_code,
-                origin
+                booker_id,
+                guest,
+                guest_gender,
+                guest_age,
+                guest_email,
+                final_price_excl_tax,
+                final_price_incl_tax,
+                duration_in_days,
+                duration_in_nights,
+                product
             ) VALUES (
-                :property_id,
-                :reservation_id,
-                :date_created,
-                :date_modified,
+                :id,
+                :reference,
+                :starts_at,
+                :ends_at,
                 :status,
-                :guest_id,
-                :profile_id,
-                :guest_name,
-                :start_date,
-                :end_date,
-                :adults,
-                :children,
-                :balance,
-                :source_id,
-                :source_name,
-                :room_type_name,
-                :room_name,
-                :third_party_identifier,
-                :allotment_block_code,
-                :group_code,
-                :origin
-            )'
+                :booker_id,
+                :guest,
+                :guest_gender,
+                :guest_age,
+                :guest_email,
+                :final_price_excl_tax,
+                :final_price_incl_tax,
+                :duration_in_days,
+                :duration_in_nights,
+                :product
+            ) ON DUPLICATE KEY UPDATE
+                reference            = VALUES(reference),
+                starts_at            = VALUES(starts_at),
+                ends_at              = VALUES(ends_at),
+                status               = VALUES(status),
+                booker_id            = VALUES(booker_id),
+                guest                = VALUES(guest),
+                guest_gender         = VALUES(guest_gender),
+                guest_age            = VALUES(guest_age),
+                guest_email          = VALUES(guest_email),
+                final_price_excl_tax = VALUES(final_price_excl_tax),
+                final_price_incl_tax = VALUES(final_price_incl_tax),
+                duration_in_days     = VALUES(duration_in_days),
+                duration_in_nights   = VALUES(duration_in_nights),
+                product              = VALUES(product),
+                updated_at           = CURRENT_TIMESTAMP'
         );
 
         $this->pdo->beginTransaction();
 
         try {
-            $deleteStmt->execute($reservationIds);
-
             foreach ($reservations as $reservation) {
-                $firstRoom = isset($reservation['rooms'][0]) && is_array($reservation['rooms'][0])
-                    ? $reservation['rooms'][0]
+                $firstGuest = isset($reservation['guests'][0]['person'])
+                    && is_array($reservation['guests'][0]['person'])
+                    ? $reservation['guests'][0]['person']
                     : [];
 
+                $guestName = trim(
+                    trim((string) ($firstGuest['first_name'] ?? '')) . ' ' .
+                    trim((string) ($firstGuest['last_name'] ?? ''))
+                );
+
+                $products = isset($reservation['_products']) && is_array($reservation['_products'])
+                    ? implode('; ', $reservation['_products'])
+                    : null;
+
                 $statement->execute([
-                    'property_id' => (string) ($reservation['propertyID'] ?? ''),
-                    'reservation_id' => (string) ($reservation['reservationID'] ?? ''),
-                    'date_created' => (string) ($reservation['dateCreated'] ?? ''),
-                    'date_modified' => (string) ($reservation['dateModified'] ?? ''),
-                    'status' => (string) ($reservation['status'] ?? ''),
-                    'guest_id' => (string) ($reservation['guestID'] ?? ''),
-                    'profile_id' => (string) ($reservation['profileID'] ?? ''),
-                    'guest_name' => (string) ($reservation['guestName'] ?? ''),
-                    'start_date' => (string) ($reservation['startDate'] ?? ''),
-                    'end_date' => (string) ($reservation['endDate'] ?? ''),
-                    'adults' => (int) ($reservation['adults'] ?? 0),
-                    'children' => (int) ($reservation['children'] ?? 0),
-                    'balance' => (int) ($reservation['balance'] ?? 0),
-                    'source_id' => (string) ($reservation['sourceID'] ?? ''),
-                    'source_name' => (string) ($reservation['sourceName'] ?? ''),
-                    'room_type_name' => ($firstRoom['roomTypeName'] ?? '') !== '' ? (string) $firstRoom['roomTypeName'] : null,
-                    'room_name' => ($firstRoom['roomName'] ?? '') !== '' ? (string) $firstRoom['roomName'] : null,
-                    'third_party_identifier' => $reservation['thirdPartyIdentifier'] ?: null,
-                    'allotment_block_code' => $reservation['allotmentBlockCode'] ?: null,
-                    'group_code' => $reservation['groupCode'] ?: null,
-                    'origin' => ($reservation['origin'] ?? '') !== '' ? $reservation['origin'] : null,
+                    'id'                   => (string) ($reservation['id'] ?? ''),
+                    'reference'            => (string) ($reservation['reference'] ?? ''),
+                    'starts_at'            => (string) ($reservation['starts_at'] ?? ''),
+                    'ends_at'              => (string) ($reservation['ends_at'] ?? ''),
+                    'status'               => (string) ($reservation['status'] ?? ''),
+                    'booker_id'            => (string) ($reservation['booker_id'] ?? ''),
+                    'guest'                => $guestName,
+                    'guest_gender'         => (string) ($firstGuest['gender'] ?? ''),
+                    'guest_age'            => isset($firstGuest['age']) && $firstGuest['age'] !== null
+                        ? (int) $firstGuest['age']
+                        : null,
+                    'guest_email'          => (string) ($firstGuest['email'] ?? ''),
+                    'final_price_excl_tax' => (float) ($reservation['final_price_excl_tax'] ?? 0),
+                    'final_price_incl_tax' => (float) ($reservation['final_price_incl_tax'] ?? 0),
+                    'duration_in_days'     => (int) ($reservation['duration_in_days'] ?? 0),
+                    'duration_in_nights'   => (int) ($reservation['duration_in_nights'] ?? 0),
+                    'product'              => $products,
                 ]);
             }
 
-            $stalePlaceholders = implode(',', array_fill(0, count($reservationIds), '?'));
-            $this->pdo->prepare(
-                "DELETE FROM tbl_reservation_cloudbed WHERE reservation_id NOT IN ($stalePlaceholders)"
-            )->execute($reservationIds);
+            // Remove local rows no longer in the pulled set
+            if ($ids !== []) {
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $this->pdo->prepare(
+                    "DELETE FROM tbl_reservation_b_layer WHERE id NOT IN ($placeholders)"
+                )->execute($ids);
+            }
 
             $this->pdo->commit();
         } catch (\Throwable $exception) {

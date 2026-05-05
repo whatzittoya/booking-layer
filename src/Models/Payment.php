@@ -118,7 +118,7 @@ class Payment
         return $payment ?: null;
     }
 
-    public function markPostedToCloudbeds(int $paymentId, ?int $customerTableId): void
+    public function markPostedToBookingLayer(int $paymentId, ?int $customerTableId): void
     {
         $this->pdo->beginTransaction();
 

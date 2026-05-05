@@ -1,5 +1,5 @@
 param(
-    [string]$TaskName = "Cloudbed Pull Reservations",
+    [string]$TaskName = "BookingLayer Pull Reservations",
     [string]$PhpPath = "php.exe"
 )
 

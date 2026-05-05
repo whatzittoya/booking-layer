@@ -1,5 +1,5 @@
 {
-    "name": "quinos/web-cloudbed",
+    "name": "quinos/booking-layer",
     "description": "Slim MVC employee login app",
     "require": {
         "php": "^8.1",

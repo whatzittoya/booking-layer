@@ -145,14 +145,14 @@ class PaymentController
         if ($accessToken === null) {
             return $this->json($response, [
                 'success' => false,
-                'message' => 'Cloudbeds API key was not configured.',
+                'message' => 'Booking Layer API token was not configured.',
             ], 422);
         }
 
         if (($accessToken['item_id'] ?? '') === '') {
             return $this->json($response, [
                 'success' => false,
-                'message' => 'Cloudbeds item ID was not configured.',
+                'message' => 'Booking Layer item ID was not configured.',
             ], 422);
         }
 
@@ -164,11 +164,12 @@ class PaymentController
         }
 
         try {
-            $apiResponse = $this->client->request('POST', rtrim($this->settings['cloudbeds']['base_url'], '/') . '/postItem', [
+            // TODO: update endpoint path, content-type, and body params to match Booking Layer API
+            $apiResponse = $this->client->request('POST', rtrim($this->settings['bookinglayer']['base_url'], '/') . '/postItem', [
                 'headers' => [
                     'accept' => 'application/json',
                     'content-type' => 'application/x-www-form-urlencoded',
-                    'x-api-key' => $accessToken['api_key'],
+                    'Authorization' => 'Bearer ' . $accessToken['api_key'],
                 ],
                 'form_params' => [
                     'reservationID' => $payment['reservation_id'],
@@ -186,21 +187,21 @@ class PaymentController
             if (!is_array($payload) || !($payload['success'] ?? false)) {
                 return $this->json($response, [
                     'success' => false,
-                    'message' => 'Cloudbeds rejected the payment item.',
+                    'message' => 'Booking Layer rejected the payment item.',
                 ], 502);
             }
 
-            $this->payments->markPostedToCloudbeds($paymentId, isset($payment['customer_table_id']) ? (int) $payment['customer_table_id'] : null);
+            $this->payments->markPostedToBookingLayer($paymentId, isset($payment['customer_table_id']) ? (int) $payment['customer_table_id'] : null);
 
             return $this->json($response, [
                 'success' => true,
-                'message' => 'Payment sent to Cloudbeds.',
+                'message' => 'Payment sent to Booking Layer.',
                 'data' => $payload['data'] ?? null,
             ]);
         } catch (\Throwable $exception) {
             return $this->json($response, [
                 'success' => false,
-                'message' => 'Failed to send payment to Cloudbeds: ' . $exception->getMessage(),
+                'message' => 'Failed to send payment to Booking Layer: ' . $exception->getMessage(),
             ], 500);
         }
     }

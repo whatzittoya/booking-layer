@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set "TASK_NAME=Cloudbed Pull Reservations"
+set "TASK_NAME=BookingLayer Pull Reservations"
 set "PHP_EXE=%PHP_PATH%"
 if "%PHP_EXE%"=="" set "PHP_EXE=php.exe"
 

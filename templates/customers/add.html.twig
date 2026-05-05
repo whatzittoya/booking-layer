@@ -42,10 +42,9 @@
                         <thead class="bg-slate-50">
                             <tr class="text-left text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                                 <th class="px-6 py-4">Guest</th>
-                                <th class="px-6 py-4">Reservation</th>
+                                <th class="px-6 py-4">Reference</th>
                                 <th class="px-6 py-4">Stay</th>
-                                <th class="px-6 py-4">Room Type</th>
-                                <th class="px-6 py-4">Room Name</th>
+                                <th class="px-6 py-4">Product</th>
                                 <th class="px-6 py-4">Status</th>
                                 <th class="px-6 py-4">Action</th>
                             </tr>
@@ -53,11 +52,10 @@
                         <tbody id="customer-results-body" class="divide-y divide-slate-100 text-sm text-slate-700">
                             {% for customer in customers %}
                                 <tr>
-                                    <td class="px-6 py-4 font-semibold text-slate-900">{{ customer.guest_name }}</td>
-                                    <td class="px-6 py-4">{{ customer.reservation_id }}</td>
-                                    <td class="px-6 py-4">{{ customer.start_date }} to {{ customer.end_date }}</td>
-                                    <td class="px-6 py-4">{{ customer.room_type_name ?: '-' }}</td>
-                                    <td class="px-6 py-4">{{ customer.room_name ?: '-' }}</td>
+                                    <td class="px-6 py-4 font-semibold text-slate-900">{{ customer.guest }}</td>
+                                    <td class="px-6 py-4">{{ customer.reference }}</td>
+                                    <td class="px-6 py-4">{{ customer.starts_at|date('Y-m-d') }} to {{ customer.ends_at|date('Y-m-d') }}</td>
+                                    <td class="px-6 py-4">{{ customer.product ?: '-' }}</td>
                                     <td class="px-6 py-4">
                                         <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">
                                             {{ customer.status|replace({'_': ' '}) }}
@@ -149,13 +147,14 @@
                 }
 
                 const rows = customers.map(function (customer) {
+                    const startsAt = (customer.starts_at || '').substring(0, 10);
+                    const endsAt   = (customer.ends_at   || '').substring(0, 10);
                     return `
                         <tr>
-                            <td class="px-6 py-4 font-semibold text-slate-900">${escapeHtml(customer.guest_name)}</td>
-                            <td class="px-6 py-4">${escapeHtml(customer.reservation_id)}</td>
-                            <td class="px-6 py-4">${escapeHtml(customer.start_date)} to ${escapeHtml(customer.end_date)}</td>
-                            <td class="px-6 py-4">${escapeHtml(customer.room_type_name || '-')}</td>
-                            <td class="px-6 py-4">${escapeHtml(customer.room_name || '-')}</td>
+                            <td class="px-6 py-4 font-semibold text-slate-900">${escapeHtml(customer.guest)}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.reference)}</td>
+                            <td class="px-6 py-4">${escapeHtml(startsAt)} to ${escapeHtml(endsAt)}</td>
+                            <td class="px-6 py-4">${escapeHtml(customer.product || '-')}</td>
                             <td class="px-6 py-4">${statusHtml(customer.status)}</td>
                             <td class="px-6 py-4">${actionButtonHtml(customer)}</td>
                         </tr>

@@ -193,11 +193,11 @@ class ReservationController
             return $this->redirect($response, '/login');
         }
 
-        $cloudbeds = $this->settings['cloudbeds'];
+        $bookinglayer = $this->settings['bookinglayer'];
         $accessToken = $this->accessTokens->latest();
 
         if ($accessToken === null) {
-            $message = 'Cloudbeds API key was not configured.';
+            $message = 'Booking Layer API token was not configured.';
 
             if ($this->expectsJson($request)) {
                 return $this->json($response, [
@@ -212,35 +212,59 @@ class ReservationController
         }
 
         try {
-            $apiResponse = $this->client->request('GET', $cloudbeds['base_url'] . '/getReservations', [
-                'headers' => [
-                    'accept' => 'application/json',
-                    'x-api-key' => $accessToken['api_key'],
-                ],
-                'query' => [
-                    'status' => $cloudbeds['reservation_status'],
-                    'includeAllRooms' => 'true',
-                ],
+            $authHeader = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
+            $baseUrl    = rtrim($bookinglayer['base_url'], '/');
+
+            // Step 1: fetch confirmed bookings with guests expanded
+            $bookingsResponse = $this->client->request('GET', $baseUrl . '/bookings', [
+                'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
+                'query'   => ['expand[]' => ['guests', 'booker']],
+                'json'    => ['status' => $bookinglayer['reservation_status']],
                 'timeout' => 30,
             ]);
 
-            $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-            $items = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+            $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+            $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
 
-            $synced = $this->reservations->upsertMany($items);
-            $message = sprintf('Synced %d reservation(s) from Cloudbeds.', $synced);
+            // Step 2: for each booking fetch booking_lines to get product names
+            foreach ($bookings as &$booking) {
+                $bookingId = (string) ($booking['id'] ?? '');
+
+                if ($bookingId === '') {
+                    $booking['_products'] = [];
+                    continue;
+                }
+
+                $linesResponse = $this->client->request('GET', $baseUrl . '/booking_lines', [
+                    'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
+                    'query'   => ['expand[]' => 'product'],
+                    'json'    => ['booking_id' => $bookingId],
+                    'timeout' => 30,
+                ]);
+
+                $linesPayload       = json_decode((string) $linesResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+                $lines              = is_array($linesPayload['data'] ?? null) ? $linesPayload['data'] : [];
+                $booking['_products'] = array_values(array_filter(array_map(
+                    fn($line) => (string) ($line['product']['backoffice_title'] ?? ''),
+                    $lines,
+                )));
+            }
+            unset($booking);
+
+            $synced  = $this->reservations->upsertMany($bookings);
+            $message = sprintf('Synced %d reservation(s) from Booking Layer.', $synced);
 
             if ($this->expectsJson($request)) {
                 return $this->json($response, [
                     'success' => true,
                     'message' => $message,
-                    'synced' => $synced,
+                    'synced'  => $synced,
                 ]);
             }
 
             $this->flash->addMessage('success', $message);
         } catch (\Throwable $exception) {
-            $message = 'Failed to pull reservations from Cloudbeds: ' . $exception->getMessage();
+            $message = 'Failed to pull reservations from Booking Layer: ' . $exception->getMessage();
 
             if ($this->expectsJson($request)) {
                 return $this->json($response, [

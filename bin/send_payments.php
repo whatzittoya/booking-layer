@@ -28,12 +28,12 @@ $client = $container->get(Client::class);
 $accessToken = $accessTokens->latest();
 
 if ($accessToken === null) {
-    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Cloudbeds API key was not found in access_token.\n");
+    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Booking Layer API token was not found in access_token.\n");
     exit(1);
 }
 
 if (($accessToken['item_id'] ?? '') === '') {
-    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Cloudbeds item ID was not configured.\n");
+    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Booking Layer item ID was not configured.\n");
     exit(1);
 }
 
@@ -44,7 +44,8 @@ if ($unsentPayments === []) {
     exit(0);
 }
 
-$baseUrl    = rtrim($settings['cloudbeds']['base_url'], '/');
+// TODO: update endpoint path, content-type, and body params to match Booking Layer API
+$baseUrl    = rtrim($settings['bookinglayer']['base_url'], '/');
 $sent       = 0;
 $failed     = 0;
 
@@ -52,9 +53,9 @@ foreach ($unsentPayments as $payment) {
     try {
         $apiResponse = $client->request('POST', $baseUrl . '/postItem', [
             'headers' => [
-                'accept'       => 'application/json',
-                'content-type' => 'application/x-www-form-urlencoded',
-                'x-api-key'    => $accessToken['api_key'],
+                'accept'        => 'application/json',
+                'content-type'  => 'application/x-www-form-urlencoded',
+                'Authorization' => 'Bearer ' . $accessToken['api_key'],
             ],
             'form_params' => [
                 'reservationID' => $payment['reservation_id'],
@@ -71,7 +72,7 @@ foreach ($unsentPayments as $payment) {
 
         if (!is_array($payload) || !($payload['success'] ?? false)) {
             fwrite(STDERR, sprintf(
-                "[%s] Cloudbeds rejected payment #%d: %s\n",
+                "[%s] Booking Layer rejected payment #%d: %s\n",
                 date('Y-m-d H:i:s'),
                 $payment['id'],
                 $payload['message'] ?? 'unknown error',
@@ -80,7 +81,7 @@ foreach ($unsentPayments as $payment) {
             continue;
         }
 
-        $payments->markPostedToCloudbeds($payment['id'], (int) $payment['customer_table_id']);
+        $payments->markPostedToBookingLayer($payment['id'], (int) $payment['customer_table_id']);
         $sent++;
 
         fwrite(STDOUT, sprintf(

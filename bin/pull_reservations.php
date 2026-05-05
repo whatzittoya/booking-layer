@@ -28,27 +28,52 @@ $client = $container->get(Client::class);
 $accessToken = $accessTokens->latest();
 
 if ($accessToken === null) {
-    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Cloudbeds API key was not found in access_token.\n");
+    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Booking Layer API token was not found in access_token.\n");
     exit(1);
 }
 
 try {
-    $cloudbeds = $settings['cloudbeds'];
-    $response = $client->request('GET', rtrim($cloudbeds['base_url'], '/') . '/getReservations', [
-        'headers' => [
-            'accept' => 'application/json',
-            'x-api-key' => $accessToken['api_key'],
-        ],
-        'query' => [
-            'status' => $cloudbeds['reservation_status'],
-            'includeAllRooms' => 'true',
-        ],
+    $bookinglayer = $settings['bookinglayer'];
+    $baseUrl      = rtrim($bookinglayer['base_url'], '/');
+    $authHeader   = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
+
+    // Step 1: fetch confirmed bookings with guests expanded
+    $bookingsResponse = $client->request('GET', $baseUrl . '/bookings', [
+        'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
+        'query'   => ['expand[]' => ['guests', 'booker']],
+        'json'    => ['status' => $bookinglayer['reservation_status']],
         'timeout' => 30,
     ]);
 
-    $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
-    $items = is_array($payload['data'] ?? null) ? $payload['data'] : [];
-    $synced = $reservations->upsertMany($items);
+    $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+    $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
+
+    // Step 2: for each booking fetch booking_lines to get product names
+    foreach ($bookings as &$booking) {
+        $bookingId = (string) ($booking['id'] ?? '');
+
+        if ($bookingId === '') {
+            $booking['_products'] = [];
+            continue;
+        }
+
+        $linesResponse = $client->request('GET', $baseUrl . '/booking_lines', [
+            'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
+            'query'   => ['expand[]' => 'product'],
+            'json'    => ['booking_id' => $bookingId],
+            'timeout' => 30,
+        ]);
+
+        $linesPayload         = json_decode((string) $linesResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $lines                = is_array($linesPayload['data'] ?? null) ? $linesPayload['data'] : [];
+        $booking['_products'] = array_values(array_filter(array_map(
+            fn($line) => (string) ($line['product']['backoffice_title'] ?? ''),
+            $lines,
+        )));
+    }
+    unset($booking);
+
+    $synced         = $reservations->upsertMany($bookings);
     $latestPulledAt = $reservations->latestPulledAt() ?? date('Y-m-d H:i:s');
 
     fwrite(STDOUT, sprintf(

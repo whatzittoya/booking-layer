@@ -15,41 +15,38 @@ class Customer
     public function upsertFromReservation(array $reservation): void
     {
         $reservationId = (string) ($reservation['reservation_id'] ?? '');
-        $guestId = (string) ($reservation['guest_id'] ?? '');
-        $existingId = $this->findExistingIdByGuestId($guestId, $reservationId)
+        $bookerId      = (string) ($reservation['booker_id'] ?? '');
+
+        $existingId = $this->findExistingIdByBookerId($bookerId, $reservationId)
             ?? $this->findExistingIdByReservationId($reservationId);
 
         $payload = [
-            'code' => 'cloudbed_guest',
-            'name' => (string) ($reservation['guest_name'] ?? ''),
-            'notes' => (string) ($reservation['guest_id'] ?? ''),
-            'address' => $reservation['room_type_name'] !== null && $reservation['room_type_name'] !== ''
-                ? (string) $reservation['room_type_name']
+            'code'           => 'bookinglayer_guest',
+            'name'           => (string) ($reservation['guest'] ?? ''),
+            'notes'          => $bookerId,
+            'address'        => ($reservation['product'] ?? '') !== ''
+                ? (string) $reservation['product']
                 : null,
-            'postcode' => $reservation['property_id'] !== null && $reservation['property_id'] !== ''
-                ? (string) $reservation['property_id']
-                : null,
-            'suburb' => $reservation['room_name'] !== null && $reservation['room_name'] !== ''
-                ? (string) $reservation['room_name']
-                : null,
+            'postcode'       => null,
+            'suburb'         => null,
             'reservation_id' => $reservationId,
-            'created' => (string) ($reservation['start_date'] ?? ''),
-            'expired' => (string) ($reservation['end_date'] ?? ''),
+            'created'        => (string) ($reservation['starts_at'] ?? ''),
+            'expired'        => (string) ($reservation['ends_at'] ?? ''),
         ];
 
         if ($existingId !== null) {
             $statement = $this->pdo->prepare(
                 'UPDATE tbl_customers
-                 SET active = b\'1\',
-                     code = :code,
-                     name = :name,
-                     notes = :notes,
-                     address = :address,
-                     postcode = :postcode,
-                     suburb = :suburb,
+                 SET active         = b\'1\',
+                     code           = :code,
+                     name           = :name,
+                     notes          = :notes,
+                     address        = :address,
+                     postcode       = :postcode,
+                     suburb         = :suburb,
                      reservation_id = :reservation_id,
-                     created = :created,
-                     expired = :expired
+                     created        = :created,
+                     expired        = :expired
                  WHERE id = :id'
             );
 
@@ -101,25 +98,23 @@ class Customer
              LIMIT 1'
         );
 
-        $statement->execute([
-            'reservation_id' => $reservationId,
-        ]);
+        $statement->execute(['reservation_id' => $reservationId]);
 
         $row = $statement->fetch();
 
         return $row !== false ? (int) $row['id'] : null;
     }
 
-    private function findExistingIdByGuestId(string $guestId, string $reservationId): ?int
+    private function findExistingIdByBookerId(string $bookerId, string $reservationId): ?int
     {
-        if ($guestId === '') {
+        if ($bookerId === '') {
             return null;
         }
 
         $statement = $this->pdo->prepare(
             'SELECT id
              FROM tbl_customers
-             WHERE notes = :guest_id
+             WHERE notes = :booker_id
              ORDER BY
                  CASE
                      WHEN reservation_id = :reservation_id THEN 0
@@ -131,7 +126,7 @@ class Customer
         );
 
         $statement->execute([
-            'guest_id' => $guestId,
+            'booker_id'      => $bookerId,
             'reservation_id' => $reservationId,
         ]);
 

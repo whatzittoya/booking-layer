@@ -208,7 +208,7 @@
                                     ${canSend ? '' : 'disabled'}
                                 >
                                     <span class="payment-send-spinner hidden h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
-                                    <span class="payment-send-label">${canSend ? 'Send to Cloudbeds' : 'Missing stay data'}</span>
+                                    <span class="payment-send-label">${canSend ? 'Send to BookingLayer' : 'Missing stay data'}</span>
                                 </button>
                             </div>
                             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -411,15 +411,15 @@
                 }).done(function (response) {
                     refreshPayments({
                         showSuccess: true,
-                        successMessage: response.message || 'Payment sent to Cloudbeds.'
+                        successMessage: response.message || 'Payment sent to BookingLayer.'
                     });
                 }).fail(function (xhr) {
                     const response = xhr.responseJSON || {};
-                    showAlert(response.message || 'Failed to send payment to Cloudbeds.', true);
+                    showAlert(response.message || 'Failed to send payment to BookingLayer.', true);
                 }).always(function () {
                     $button.prop('disabled', false);
                     $spinner.addClass('hidden');
-                    $label.text('Send to Cloudbeds');
+                    $label.text('Send to BookingLayer');
                 });
             });
 
