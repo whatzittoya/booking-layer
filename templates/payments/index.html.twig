@@ -195,7 +195,7 @@
             }
 
             function detailRowHtml(payment) {
-                const canSend = Boolean(payment.reservation_id) && Boolean(payment.property_id);
+                const canSend = Boolean(payment.reservation_id);
 
                 return `
                     <tr id="payment-detail-${escapeHtml(payment.id)}" class="payment-detail-row hidden bg-slate-50/80">

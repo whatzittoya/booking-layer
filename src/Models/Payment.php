@@ -58,11 +58,13 @@ class Payment
                 cs.id,
                 cs.invoice_id,
                 cs.customer_id,
+                cs.subtotal,
+                cs.discountamount,
+                cs.servicechargeamount,
                 cs.amount,
                 c.name AS customer_name,
                 c.id AS customer_table_id,
-                c.reservation_id,
-                c.postcode AS property_id
+                c.reservation_id
              FROM check_sales cs
              INNER JOIN tbl_customers c ON c.id = cs.customer_id AND c.reservation_id IS NOT NULL
              WHERE (cs.trobex IS NULL OR CAST(cs.trobex AS UNSIGNED) = 0)

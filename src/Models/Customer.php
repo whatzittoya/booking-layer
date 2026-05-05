@@ -24,11 +24,11 @@ class Customer
             'code'           => 'bookinglayer_guest',
             'name'           => (string) ($reservation['guest'] ?? ''),
             'notes'          => $bookerId,
-            'address'        => ($reservation['product'] ?? '') !== ''
+            'address'        => null,
+            'postcode'       => null,
+            'suburb'         => ($reservation['product'] ?? '') !== ''
                 ? (string) $reservation['product']
                 : null,
-            'postcode'       => null,
-            'suburb'         => null,
             'reservation_id' => $reservationId,
             'created'        => (string) ($reservation['starts_at'] ?? ''),
             'expired'        => (string) ($reservation['ends_at'] ?? ''),

@@ -38,9 +38,8 @@ try {
     $authHeader   = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
 
     // Step 1: fetch confirmed bookings with guests expanded
-    $bookingsResponse = $client->request('GET', $baseUrl . '/bookings', [
+    $bookingsResponse = $client->request('GET', $baseUrl . '/bookings?expand[]=guests&expand[]=booker', [
         'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-        'query'   => ['expand[]' => ['guests', 'booker']],
         'json'    => ['status' => $bookinglayer['reservation_status']],
         'timeout' => 30,
     ]);
@@ -57,9 +56,8 @@ try {
             continue;
         }
 
-        $linesResponse = $client->request('GET', $baseUrl . '/booking_lines', [
+        $linesResponse = $client->request('GET', $baseUrl . '/booking_lines?expand[]=product', [
             'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-            'query'   => ['expand[]' => 'product'],
             'json'    => ['booking_id' => $bookingId],
             'timeout' => 30,
         ]);

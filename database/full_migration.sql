@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS `access_token` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `client_id` VARCHAR(255) NOT NULL,
-    `api_key` VARCHAR(255) NOT NULL,
+    `api_key` TEXT NOT NULL,
     `item_id` VARCHAR(32) DEFAULT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -37,7 +37,7 @@ SET @customer_reservation_id_exists := (
 
 SET @add_customer_reservation_id := IF(
     @customer_reservation_id_exists = 0,
-    'ALTER TABLE `tbl_customers` ADD COLUMN `reservation_id` VARCHAR(32) NULL AFTER `refunded`',
+    'ALTER TABLE `tbl_customers` ADD COLUMN `reservation_id` VARCHAR(255) NULL AFTER `refunded`',
     'SELECT 1'
 );
 
@@ -56,7 +56,7 @@ SET @customer_reservation_id_nullable := (
 
 SET @make_customer_reservation_id_nullable := IF(
     @customer_reservation_id_nullable = 0,
-    'ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(32) NULL',
+    'ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(255) NULL',
     'SELECT 1'
 );
 

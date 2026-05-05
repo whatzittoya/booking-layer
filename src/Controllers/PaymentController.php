@@ -149,54 +149,47 @@ class PaymentController
             ], 422);
         }
 
-        if (($accessToken['item_id'] ?? '') === '') {
-            return $this->json($response, [
-                'success' => false,
-                'message' => 'Booking Layer item ID was not configured.',
-            ], 422);
-        }
-
-        if (($payment['reservation_id'] ?? '') === '' || ($payment['property_id'] ?? '') === '') {
-            return $this->json($response, [
-                'success' => false,
-                'message' => 'Payment is missing reservation ID or property ID.',
-            ], 422);
-        }
-
         try {
-            // TODO: update endpoint path, content-type, and body params to match Booking Layer API
-            $apiResponse = $this->client->request('POST', rtrim($this->settings['bookinglayer']['base_url'], '/') . '/postItem', [
-                'headers' => [
-                    'accept' => 'application/json',
-                    'content-type' => 'application/x-www-form-urlencoded',
-                    'Authorization' => 'Bearer ' . $accessToken['api_key'],
-                ],
-                'form_params' => [
-                    'reservationID' => $payment['reservation_id'],
-                    'propertyID' => $payment['property_id'],
-                    'itemID' => $accessToken['item_id'],
-                    'itemQuantity' => 1,
-                    'itemPrice' => $payment['amount'],
-                    'itemNote' => (string) $payment['id'],
-                ],
-                'timeout' => 30,
-            ]);
+            $baseUrl  = rtrim($this->settings['bookinglayer']['base_url'], '/');
+            $bookingId = $payment['reservation_id'];
+            $subtotal  = (float) ($payment['subtotal'] ?? 0);
+            $amount    = (float) ($payment['amount'] ?? 0);
+            $svcCharge = (float) ($payment['servicechargeamount'] ?? 0);
+            $taxRate   = $subtotal > 0 ? round(($svcCharge / $subtotal) * 100, 2) : 0;
+
+            $apiResponse = $this->client->request(
+                'POST',
+                $baseUrl . '/bookings/' . $bookingId . '/amendments',
+                [
+                    'headers' => [
+                        'Content-Type'  => 'application/json',
+                        'Accept'        => 'application/json',
+                        'Authorization' => 'Bearer ' . $accessToken['api_key'],
+                    ],
+                    'json' => [
+                        'backoffice_title'      => 'Quinos - ' . $payment['id'],
+                        'category'              => 'fee',
+                        'qty'                   => 1,
+                        'unit_price_excl_tax'   => $subtotal,
+                        'unit_price_incl_tax'   => $amount,
+                        'tax_rate'              => $taxRate,
+                        'total_price_incl_tax'  => $amount,
+                    ],
+                    'timeout' => 30,
+                ]
+            );
 
             $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
 
-            if (!is_array($payload) || !($payload['success'] ?? false)) {
-                return $this->json($response, [
-                    'success' => false,
-                    'message' => 'Booking Layer rejected the payment item.',
-                ], 502);
-            }
-
-            $this->payments->markPostedToBookingLayer($paymentId, isset($payment['customer_table_id']) ? (int) $payment['customer_table_id'] : null);
+            $this->payments->markPostedToBookingLayer(
+                $paymentId,
+                isset($payment['customer_table_id']) ? (int) $payment['customer_table_id'] : null
+            );
 
             return $this->json($response, [
                 'success' => true,
                 'message' => 'Payment sent to Booking Layer.',
-                'data' => $payload['data'] ?? null,
+                'data'    => $payload['data'] ?? $payload,
             ]);
         } catch (\Throwable $exception) {
             return $this->json($response, [

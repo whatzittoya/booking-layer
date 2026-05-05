@@ -25,8 +25,7 @@ class ReservationController
         private readonly Client $client,
         private readonly SchedulerService $scheduler,
         private readonly array $settings
-    ) {
-    }
+    ) {}
 
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
@@ -212,13 +211,12 @@ class ReservationController
         }
 
         try {
-            $authHeader = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
+            $authHeader = ['Authorization' => 'Bearer ' . 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNzJkOWQ4NzU4MWFmOWJjOTE5ODAyZWE4MjAyZGIxZjM2OWQyYjAxMTg0NzNiZDM4ODgwZmE1YzRhNjA5YjUzNDNiNDI0YTNlYmE1NjY4OTEiLCJpYXQiOjE3Nzc4ODkyNzcuNzMwOTExLCJuYmYiOjE3Nzc4ODkyNzcuNzMwOTEzLCJleHAiOjgwODkyMzY0NzcuNzI5MjY2LCJzdWIiOiI3NjE3NjciLCJzY29wZXMiOltdfQ.SW5GUa4CL3wgu2rc4dBBd5fVxORUOpVwWPkbkVhpyrgJRLOonSZt-0vEgEmFQbmOzJHZT8OUwd50oT5pPGbS04a6Hjt-7R0yhRVr8hruF4UIfSzqdjL8-QZJrpAyO2F8-W3gn-Lr8AAHeq7fkdaQLxddGOn60JEKHm3SKbnjXAyOtqY2kcEMvLYtPgdgmJMyL8kgOnDO7oO0Do0KiL_qWBYXl_dXiGobpvrXQLOpk8YWmNtRKxEKi_njKbJN-csrNS04YgjOd5PhpYBrCir02h7jkfEakaNiwR58s0yFirQ3FsUWGJXE-zeEjihHl0_FBWWnRhpFJfJcO-U4whQTBDKm5ROtRFQlwtH-G3WCBd7DFkM0D3B_02FBrbAmnAzdWNfzRQbBlul0OigFCH5KqXyVI9j2LpZfq2OXmskPBgXCtZGUVhCYuWGwzbx_vy8XV2j5fiGDFitdLsJfr1_TiWNFNNc3KZWFPZbfVdEyoT9GwyyT2TdLDLLijI67-114ivYx0tqqDVV5-2yqo6rg8iZgrxbYOW94FmoOjz4U1hpZjaq3CCJ-W-UVgM2B9OrH0nQD4fF898PlhDCmmMgxLWAZ2Kvgl1HE5f2Z1bMWyODwWxSCMCifB_VQhVXAEjNNBCfu1d2Bux6Q8-KKDDsicP0GBleJfwe4t6mi1H0VJ8s'];
             $baseUrl    = rtrim($bookinglayer['base_url'], '/');
 
             // Step 1: fetch confirmed bookings with guests expanded
-            $bookingsResponse = $this->client->request('GET', $baseUrl . '/bookings', [
+            $bookingsResponse = $this->client->request('GET', $baseUrl . '/bookings?expand[]=guests&expand[]=booker', [
                 'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-                'query'   => ['expand[]' => ['guests', 'booker']],
                 'json'    => ['status' => $bookinglayer['reservation_status']],
                 'timeout' => 30,
             ]);
@@ -235,9 +233,8 @@ class ReservationController
                     continue;
                 }
 
-                $linesResponse = $this->client->request('GET', $baseUrl . '/booking_lines', [
+                $linesResponse = $this->client->request('GET', $baseUrl . '/booking_lines?expand[]=product', [
                     'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-                    'query'   => ['expand[]' => 'product'],
                     'json'    => ['booking_id' => $bookingId],
                     'timeout' => 30,
                 ]);

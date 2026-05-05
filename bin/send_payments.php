@@ -32,11 +32,6 @@ if ($accessToken === null) {
     exit(1);
 }
 
-if (($accessToken['item_id'] ?? '') === '') {
-    fwrite(STDERR, '[' . date('Y-m-d H:i:s') . "] Booking Layer item ID was not configured.\n");
-    exit(1);
-}
-
 $unsentPayments = $payments->allUnsentClosed();
 
 if ($unsentPayments === []) {
@@ -44,42 +39,41 @@ if ($unsentPayments === []) {
     exit(0);
 }
 
-// TODO: update endpoint path, content-type, and body params to match Booking Layer API
-$baseUrl    = rtrim($settings['bookinglayer']['base_url'], '/');
-$sent       = 0;
-$failed     = 0;
+$baseUrl = rtrim($settings['bookinglayer']['base_url'], '/');
+$sent    = 0;
+$failed  = 0;
 
 foreach ($unsentPayments as $payment) {
     try {
-        $apiResponse = $client->request('POST', $baseUrl . '/postItem', [
-            'headers' => [
-                'accept'        => 'application/json',
-                'content-type'  => 'application/x-www-form-urlencoded',
-                'Authorization' => 'Bearer ' . $accessToken['api_key'],
-            ],
-            'form_params' => [
-                'reservationID' => $payment['reservation_id'],
-                'propertyID'    => $payment['property_id'],
-                'itemID'        => $accessToken['item_id'],
-                'itemQuantity'  => 1,
-                'itemPrice'     => $payment['amount'],
-                'itemNote'      => (string) $payment['id'],
-            ],
-            'timeout' => 30,
-        ]);
+        $bookingId = $payment['reservation_id'];
+        $subtotal  = (float) ($payment['subtotal'] ?? 0);
+        $amount    = (float) ($payment['amount'] ?? 0);
+        $svcCharge = (float) ($payment['servicechargeamount'] ?? 0);
+        $taxRate   = $subtotal > 0 ? round(($svcCharge / $subtotal) * 100, 2) : 0;
 
-        $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $apiResponse = $client->request(
+            'POST',
+            $baseUrl . '/bookings/' . $bookingId . '/amendments',
+            [
+                'headers' => [
+                    'Content-Type'  => 'application/json',
+                    'Accept'        => 'application/json',
+                    'Authorization' => 'Bearer ' . $accessToken['api_key'],
+                ],
+                'json' => [
+                    'backoffice_title'     => 'Quinos - ' . $payment['id'],
+                    'category'             => 'fee',
+                    'qty'                  => 1,
+                    'unit_price_excl_tax'  => $subtotal,
+                    'unit_price_incl_tax'  => $amount,
+                    'tax_rate'             => $taxRate,
+                    'total_price_incl_tax' => $amount,
+                ],
+                'timeout' => 30,
+            ]
+        );
 
-        if (!is_array($payload) || !($payload['success'] ?? false)) {
-            fwrite(STDERR, sprintf(
-                "[%s] Booking Layer rejected payment #%d: %s\n",
-                date('Y-m-d H:i:s'),
-                $payment['id'],
-                $payload['message'] ?? 'unknown error',
-            ));
-            $failed++;
-            continue;
-        }
+        json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
 
         $payments->markPostedToBookingLayer($payment['id'], (int) $payment['customer_table_id']);
         $sent++;
