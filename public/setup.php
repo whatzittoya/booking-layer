@@ -6,8 +6,10 @@ $rootPath  = dirname(__DIR__);
 $envPath   = $rootPath . '/.env';
 $envExPath = $rootPath . '/.env.example';
 $vendorDir = $rootPath . '/vendor';
+$lockFile  = $rootPath . '/storage/setup.lock';
 $tmpOut    = sys_get_temp_dir() . '/bl_composer_out.txt';
 $tmpPid    = sys_get_temp_dir() . '/bl_composer_pid.txt';
+$appUrl    = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -307,6 +309,24 @@ if ($action !== '') {
             echo json_encode(['ok' => true, 'pid' => $pid]);
             exit;
 
+        // Mark setup complete (write lock file) --------------------------------
+        case 'mark_complete':
+            $storageDir = dirname($lockFile);
+            if (!is_dir($storageDir)) {
+                @mkdir($storageDir, 0755, true);
+            }
+            $written = file_put_contents($lockFile, json_encode([
+                'completed_at' => date('c'),
+                'php'          => PHP_VERSION,
+                'host'         => $_SERVER['HTTP_HOST'] ?? 'cli',
+            ], JSON_PRETTY_PRINT) . "\n");
+            echo json_encode(
+                $written !== false
+                    ? ['ok' => true]
+                    : ['ok' => false, 'error' => 'Cannot write storage/setup.lock — check directory permissions.']
+            );
+            exit;
+
         // Poll composer output ------------------------------------------------
         case 'poll_composer':
             $offset  = max(0, (int) ($_GET['offset'] ?? 0));
@@ -345,7 +365,8 @@ $execOk  = function_exists('exec')
     && !in_array('exec', array_map('trim', explode(',', ini_get('disable_functions') ?: '')));
 $envExOk = file_exists($envExPath);
 $envOk   = file_exists($envPath);
-$vendorOk = is_dir($vendorDir);
+$vendorOk  = is_dir($vendorDir);
+$setupDone = file_exists($lockFile);
 
 $composerFound = false;
 $composerVer   = '';
@@ -365,6 +386,7 @@ if ($envExOk) {
 }
 
 $allGreen = $phpOk && $pdoOk && $envOk && $vendorOk;
+$lockData = $setupDone ? json_decode((string) file_get_contents($lockFile), true) : null;
 
 ?>
 <!DOCTYPE html>
@@ -395,15 +417,18 @@ $allGreen = $phpOk && $pdoOk && $envOk && $vendorOk;
     <p class="mt-2 text-slate-500 text-sm">Follow the steps below to get the application running.</p>
   </div>
 
-  <?php if ($allGreen): ?>
+  <?php if ($setupDone): ?>
   <!-- Already-configured banner -->
   <div class="mb-6 flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-5 py-4">
     <span class="text-emerald-500 text-xl">✓</span>
     <div>
-      <p class="font-semibold text-emerald-800 text-sm">Application is already configured.</p>
-      <p class="text-emerald-700 text-xs mt-0.5">You can still use this page to add tokens or re-run migrations.</p>
+      <p class="font-semibold text-emerald-800 text-sm">Setup already completed.</p>
+      <p class="text-emerald-700 text-xs mt-0.5">
+        Logged on <?= htmlspecialchars($lockData['completed_at'] ?? 'unknown') ?>.
+        You can still add tokens or re-run individual steps.
+      </p>
     </div>
-    <a href="./" class="ml-auto shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition">Open App →</a>
+    <a href="<?= htmlspecialchars($appUrl) ?>" class="ml-auto shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition">Open App →</a>
   </div>
   <?php endif; ?>
 
@@ -575,6 +600,8 @@ $allGreen = $phpOk && $pdoOk && $envOk && $vendorOk;
       </h2>
       <?php if ($vendorOk): ?>
       <span class="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">vendor/ present</span>
+      <?php elseif ($setupDone): ?>
+      <span class="text-xs bg-amber-100 text-amber-700 font-semibold px-2.5 py-1 rounded-full">vendor/ missing</span>
       <?php endif; ?>
     </div>
     <p class="text-sm text-slate-500 mb-4 ml-8">
@@ -603,9 +630,36 @@ $allGreen = $phpOk && $pdoOk && $envOk && $vendorOk;
     <p id="composer-msg" class="text-sm text-slate-500 mt-2 ml-8"></p>
   </section>
 
+  <!-- ── Finish Setup ─────────────────────────────────────────────────────── -->
+  <section class="bg-white rounded-2xl border border-slate-200 p-6 mb-4">
+    <h2 class="font-semibold text-slate-900 mb-1 flex items-center gap-2">
+      <span class="flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-xs font-bold">6</span>
+      Finish Setup
+    </h2>
+    <p class="text-sm text-slate-500 mb-4 ml-8">
+      Click the button below once all steps above are done. This writes
+      <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">storage/setup.lock</code>
+      as a timestamped record that setup has been completed.
+      <?php if ($setupDone): ?>
+      <br><span class="text-emerald-600 font-medium">Lock file already exists — setup was previously completed.</span>
+      <?php endif; ?>
+    </p>
+    <div class="ml-8 flex items-center gap-3">
+      <button onclick="markComplete()" class="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition">
+        <?= $setupDone ? 'Re-mark as Complete' : 'Mark Setup Complete' ?>
+      </button>
+      <?php if ($setupDone): ?>
+      <a href="<?= htmlspecialchars($appUrl) ?>" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+        Open App →
+      </a>
+      <?php endif; ?>
+      <span id="complete-msg" class="text-sm"></span>
+    </div>
+  </section>
+
   <!-- Footer -->
   <p class="text-center text-xs text-slate-400 mt-6">
-    Delete or restrict access to <code class="bg-slate-100 px-1 rounded">setup.php</code> after installation.
+    Restrict or delete <code class="bg-slate-100 px-1 rounded">setup.php</code> after installation.
   </p>
 
 </div>
@@ -743,6 +797,14 @@ async function pollComposer() {
     msg('composer-msg', true, 'Done ✓  Reloading…');
     setTimeout(() => location.reload(), 2500);
   }
+}
+
+// ── Step 6: Mark complete ──────────────────────────────────────────────────────
+async function markComplete() {
+  msg('complete-msg', true, 'Writing lock file…');
+  const json = await apiPost('mark_complete', {});
+  msg('complete-msg', json.ok, json.ok ? 'setup.lock written ✓  Reloading…' : 'Error: ' + json.error);
+  if (json.ok) setTimeout(() => location.reload(), 1500);
 }
 </script>
 </body>

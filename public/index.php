@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-// Redirect to setup wizard if Composer dependencies are missing.
-if (!file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
-    header('Location: setup.php');
+// Redirect to setup wizard if setup has not been completed yet.
+if (!file_exists(dirname(__DIR__) . '/storage/setup.lock')) {
+    $setupUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/setup.php';
+    header('Location: ' . $setupUrl);
     exit;
 }
 

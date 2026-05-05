@@ -1,5 +1,6 @@
 /vendor/
 /.env
+/storage/
 /var/cache/*
 /var/logs/*
 /skills/*
