@@ -172,6 +172,9 @@ function runMigrations(PDO $pdo): array
                 $pdo->exec("ALTER TABLE `tbl_customers` DROP INDEX `uniq_tbl_customers_reservation_id`");
                 $results[] = ['label' => 'Drop tbl_customers unique index', 'ok' => true, 'note' => 'OK'];
             }
+
+            $pdo->exec("ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(255) NULL");
+            $results[] = ['label' => 'Alter tbl_customers.reservation_id → VARCHAR(255)', 'ok' => true, 'note' => 'OK'];
         }
     } catch (Throwable $e) {
         $results[] = ['label' => 'tbl_customers alterations', 'ok' => false, 'note' => $e->getMessage()];
