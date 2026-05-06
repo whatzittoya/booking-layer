@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS `access_token` (
     `api_key` TEXT NOT NULL,
     `item_id` VARCHAR(32) DEFAULT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
@@ -99,11 +99,11 @@ CREATE TABLE IF NOT EXISTS `tbl_reservation_b_layer` (
     `duration_in_nights` INT UNSIGNED NOT NULL DEFAULT 0,
     `product` TEXT NULL DEFAULT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_b_layer_status` (`status`),
     KEY `idx_b_layer_booker_id` (`booker_id`),
     KEY `idx_b_layer_starts_at` (`starts_at`),
     KEY `idx_b_layer_ends_at` (`ends_at`),
     KEY `idx_b_layer_reference` (`reference`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

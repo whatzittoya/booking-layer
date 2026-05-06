@@ -77,7 +77,7 @@ function runMigrations(PDO $pdo): array
                 `api_key`    TEXT NOT NULL,
                 `item_id`    VARCHAR(32) DEFAULT NULL,
                 `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NULL DEFAULT NULL,
                 PRIMARY KEY (`id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci
         ",
@@ -99,14 +99,14 @@ function runMigrations(PDO $pdo): array
                 `duration_in_nights`    INT UNSIGNED   NOT NULL DEFAULT 0,
                 `product`               TEXT           NULL     DEFAULT NULL,
                 `created_at`            TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                `updated_at`            TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                `updated_at`            DATETIME       NULL     DEFAULT NULL,
                 PRIMARY KEY (`id`),
                 KEY `idx_b_layer_status`    (`status`),
                 KEY `idx_b_layer_booker_id` (`booker_id`),
                 KEY `idx_b_layer_starts_at` (`starts_at`),
                 KEY `idx_b_layer_ends_at`   (`ends_at`),
                 KEY `idx_b_layer_reference` (`reference`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci
         ",
     ];
 
@@ -239,13 +239,13 @@ if ($action !== '') {
             echo json_encode(['ok' => true, 'results' => runMigrations($pdo)]);
             exit;
 
-        // Add access token ----------------------------------------------------
+        // Add client ----------------------------------------------------------
         case 'add_token':
-            $clientId = trim((string) ($_POST['client_id'] ?? ''));
-            $apiKey   = trim((string) ($_POST['api_key']   ?? ''));
-            $itemId   = trim((string) ($_POST['item_id']   ?? '')) ?: null;
-            if ($clientId === '' || $apiKey === '') {
-                echo json_encode(['ok' => false, 'error' => 'client_id and api_key are required.']);
+            $clientId = trim((string) ($_POST['client_id'] ?? 'quinos'));
+            $apiKey   = '';
+            $itemId   = null;
+            if ($clientId === '') {
+                echo json_encode(['ok' => false, 'error' => 'client_id is required.']);
                 exit;
             }
             $env = parseEnvFile($envPath);
@@ -256,7 +256,8 @@ if ($action !== '') {
             }
             try {
                 $stmt = $pdo->prepare(
-                    'INSERT INTO `access_token` (`client_id`, `api_key`, `item_id`) VALUES (?, ?, ?)'
+                    'INSERT INTO `access_token` (`client_id`, `api_key`, `item_id`, `updated_at`)
+                     VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
                 );
                 $stmt->execute([$clientId, $apiKey, $itemId]);
                 echo json_encode(['ok' => true, 'id' => $pdo->lastInsertId()]);
@@ -265,7 +266,7 @@ if ($action !== '') {
             }
             exit;
 
-        // List existing tokens ------------------------------------------------
+        // List existing clients ----------------------------------------------
         case 'list_tokens':
             $env = parseEnvFile($envPath);
             [$pdo, $err] = connectPdo($env);
@@ -425,7 +426,7 @@ $lockData = $setupDone ? json_decode((string) file_get_contents($lockFile), true
       <p class="font-semibold text-emerald-800 text-sm">Setup already completed.</p>
       <p class="text-emerald-700 text-xs mt-0.5">
         Logged on <?= htmlspecialchars($lockData['completed_at'] ?? 'unknown') ?>.
-        You can still add tokens or re-run individual steps.
+        You can still update clients or re-run individual steps.
       </p>
     </div>
     <a href="<?= htmlspecialchars($appUrl) ?>" class="ml-auto shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-500 transition">Open App →</a>
@@ -556,35 +557,25 @@ $lockData = $setupDone ? json_decode((string) file_get_contents($lockFile), true
     <ul id="migration-list" class="mt-3 space-y-1.5 text-sm"></ul>
   </section>
 
-  <!-- ── Step 4: Access Token ─────────────────────────────────────────────── -->
+  <!-- ── Step 4: Client ID ────────────────────────────────────────────────── -->
   <section class="bg-white rounded-2xl border border-slate-200 p-6 mb-4">
     <h2 class="font-semibold text-slate-900 mb-1 flex items-center gap-2">
       <span class="flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 text-sky-700 text-xs font-bold">4</span>
-      Access Token
+      Client ID
     </h2>
-    <p class="text-sm text-slate-500 mb-4 ml-8">Add the BookingLayer API credential the app will use for requests.</p>
+    <p class="text-sm text-slate-500 mb-4 ml-8">Set the client identifier used by this installation.</p>
 
     <div id="token-list" class="ml-8 mb-4"></div>
 
     <form id="token-form" class="ml-8 grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div>
         <label class="block text-xs font-medium text-slate-600 mb-1">client_id <span class="text-red-400">*</span></label>
-        <input id="tk-client" type="text" placeholder="e.g. quinos-main"
+        <input id="tk-client" type="text" value="quinos" placeholder="quinos"
           class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-600 mb-1">item_id <span class="text-slate-400">(optional)</span></label>
-        <input id="tk-item" type="text" placeholder="Property / item ID"
-          class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400">
-      </div>
-      <div class="sm:col-span-2">
-        <label class="block text-xs font-medium text-slate-600 mb-1">api_key <span class="text-red-400">*</span></label>
-        <input id="tk-key" type="text" placeholder="BookingLayer API key"
-          class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-400">
       </div>
       <div class="sm:col-span-2 flex items-center gap-3">
         <button type="submit" class="rounded-lg bg-sky-600 px-5 py-2 text-sm font-semibold text-white hover:bg-sky-500 transition">
-          Add Token
+          Save Client
         </button>
         <span id="token-msg" class="text-sm"></span>
       </div>
@@ -717,12 +708,12 @@ async function runMigrations() {
   loadTokens();
 }
 
-// ── Step 4: Tokens ────────────────────────────────────────────────────────────
+// ── Step 4: Clients ───────────────────────────────────────────────────────────
 async function loadTokens() {
   const json = await apiGet('list_tokens', {});
   const el = document.getElementById('token-list');
   if (!json.ok || !json.tokens || json.tokens.length === 0) { el.innerHTML = ''; return; }
-  el.innerHTML = '<p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Existing tokens</p>';
+  el.innerHTML = '<p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Existing clients</p>';
   const ul = document.createElement('ul');
   ul.className = 'space-y-1.5 mb-2';
   json.tokens.forEach(t => {
@@ -742,16 +733,12 @@ loadTokens();
 document.getElementById('token-form').addEventListener('submit', async e => {
   e.preventDefault();
   const clientId = document.getElementById('tk-client').value.trim();
-  const apiKey   = document.getElementById('tk-key').value.trim();
-  const itemId   = document.getElementById('tk-item').value.trim();
-  if (!clientId || !apiKey) { msg('token-msg', false, 'client_id and api_key are required.'); return; }
+  if (!clientId) { msg('token-msg', false, 'client_id is required.'); return; }
   msg('token-msg', true, 'Saving…');
-  const json = await apiPost('add_token', { client_id: clientId, api_key: apiKey, item_id: itemId });
-  msg('token-msg', json.ok, json.ok ? 'Token added ✓  (id: ' + json.id + ')' : 'Error: ' + json.error);
+  const json = await apiPost('add_token', { client_id: clientId });
+  msg('token-msg', json.ok, json.ok ? 'Client saved ✓  (id: ' + json.id + ')' : 'Error: ' + json.error);
   if (json.ok) {
-    document.getElementById('tk-client').value = '';
-    document.getElementById('tk-key').value    = '';
-    document.getElementById('tk-item').value   = '';
+    document.getElementById('tk-client').value = 'quinos';
     loadTokens();
   }
 });

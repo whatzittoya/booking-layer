@@ -150,7 +150,8 @@ class Reservation
                 final_price_incl_tax,
                 duration_in_days,
                 duration_in_nights,
-                product
+                product,
+                updated_at
             ) VALUES (
                 :id,
                 :reference,
@@ -166,7 +167,8 @@ class Reservation
                 :final_price_incl_tax,
                 :duration_in_days,
                 :duration_in_nights,
-                :product
+                :product,
+                CURRENT_TIMESTAMP
             ) ON DUPLICATE KEY UPDATE
                 reference            = VALUES(reference),
                 starts_at            = VALUES(starts_at),
