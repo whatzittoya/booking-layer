@@ -46,6 +46,7 @@ try {
 
     $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
     $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
+    $bookings        = $reservations->filterActiveGuests($bookings);
 
     // Step 2: for each booking fetch booking_lines to get product names
     foreach ($bookings as &$booking) {

@@ -118,6 +118,11 @@ class Reservation
         return $statement->fetchAll();
     }
 
+    public function filterActiveGuests(array $reservations): array
+    {
+        return array_values(array_filter($reservations, fn($reservation) => $this->isActiveGuestReservation($reservation)));
+    }
+
     /**
      * Each item in $reservations must be a raw Booking Layer booking object
      * with an optional '_products' key (array of backoffice_title strings)
@@ -126,6 +131,8 @@ class Reservation
     public function upsertMany(array $reservations): int
     {
         if ($reservations === []) {
+            $this->pdo->exec('DELETE FROM tbl_reservation_b_layer');
+
             return 0;
         }
 
@@ -242,5 +249,33 @@ class Reservation
         }
 
         return count($reservations);
+    }
+
+    private function isActiveGuestReservation(mixed $reservation): bool
+    {
+        if (!is_array($reservation)) {
+            return false;
+        }
+
+        $checkedInStatuses = ['somebody', 'everybody'];
+        $checkedOutStatuses = [null, '', 'nobody'];
+
+        $checkInStatus = $this->normalizeStatus($reservation['check_in_status'] ?? null);
+        $webCheckInStatus = $this->normalizeStatus($reservation['web_check_in_status'] ?? null);
+        $checkOutStatus = $this->normalizeStatus($reservation['check_out_status'] ?? null);
+
+        return (
+            in_array($checkInStatus, $checkedInStatuses, true)
+            || in_array($webCheckInStatus, $checkedInStatuses, true)
+        ) && in_array($checkOutStatus, $checkedOutStatuses, true);
+    }
+
+    private function normalizeStatus(mixed $status): ?string
+    {
+        if ($status === null) {
+            return null;
+        }
+
+        return strtolower(trim((string) $status));
     }
 }

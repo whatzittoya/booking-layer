@@ -46,7 +46,7 @@ class SchedulerService
         $batPath = $this->ensureBatFile();
         $args    = $this->scheduleToSchtasksArgs($schedule);
         $cmd     = sprintf(
-            'schtasks /create /tn %s /tr %s /sc %s%s%s /f 2>&1',
+            'schtasks /create /tn %s /tr %s /sc %s%s%s /ru SYSTEM /f 2>&1',
             escapeshellarg($this->taskName),
             escapeshellarg($batPath),
             $args['sc'],
