@@ -22,23 +22,23 @@ if (file_exists($rootPath . '/.env')) {
     Dotenv::createImmutable($rootPath)->safeLoad();
 }
 
+if (($_ENV['APP_BASE_PATH'] ?? '') === '') {
+    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $scriptDir = rtrim(str_replace('/index.php', '', $scriptName), '/');
+
+    if ($scriptDir !== '' && str_ends_with($scriptDir, '/public')) {
+        $_ENV['APP_BASE_PATH'] = substr($scriptDir, 0, -7);
+    } else {
+        $_ENV['APP_BASE_PATH'] = $scriptDir;
+    }
+}
+
 $container = require $rootPath . '/config/container.php';
 $settings = $container->get('settings');
 
 $app = Bridge::create($container);
 
 $basePath = $settings['app']['base_path'];
-
-if ($basePath === '') {
-    $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
-    $scriptDir = rtrim(str_replace('/index.php', '', $scriptName), '/');
-
-    if ($scriptDir !== '' && str_ends_with($scriptDir, '/public')) {
-        $basePath = substr($scriptDir, 0, -7);
-    } else {
-        $basePath = $scriptDir;
-    }
-}
 
 if ($basePath !== '') {
     $app->setBasePath($basePath);
