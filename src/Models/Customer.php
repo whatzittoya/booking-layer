@@ -19,10 +19,11 @@ class Customer
 
         $existingId = $this->findExistingIdByBookerId($bookerId, $reservationId)
             ?? $this->findExistingIdByReservationId($reservationId);
+        $customerName = (string) ($reservation['guest'] ?? '');
 
         $payload = [
-            'code'           => 'bookinglayer_guest',
-            'name'           => (string) ($reservation['guest'] ?? ''),
+            'code'           => $customerName,
+            'name'           => $customerName,
             'notes'          => $bookerId,
             'address'        => null,
             'postcode'       => null,

@@ -223,6 +223,7 @@ class ReservationController
 
             $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
             $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
+            $deactivated     = $this->reservations->deactivateCheckedOutCustomers($bookings);
             $bookings        = $this->reservations->filterActiveGuests($bookings);
 
             // Step 2: for each booking fetch booking_lines to get product names
@@ -250,13 +251,18 @@ class ReservationController
             unset($booking);
 
             $synced  = $this->reservations->upsertMany($bookings);
-            $message = sprintf('Synced %d reservation(s) from Booking Layer.', $synced);
+            $message = sprintf(
+                'Synced %d active reservation(s) from Booking Layer. Deactivated %d checked-out customer(s).',
+                $synced,
+                $deactivated
+            );
 
             if ($this->expectsJson($request)) {
                 return $this->json($response, [
-                    'success' => true,
-                    'message' => $message,
-                    'synced'  => $synced,
+                    'success'     => true,
+                    'message'     => $message,
+                    'synced'      => $synced,
+                    'deactivated' => $deactivated,
                 ]);
             }
 

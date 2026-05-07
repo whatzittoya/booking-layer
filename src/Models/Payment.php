@@ -120,38 +120,16 @@ class Payment
         return $payment ?: null;
     }
 
-    public function markPostedToBookingLayer(int $paymentId, ?int $customerTableId): void
+    public function markPostedToBookingLayer(int $paymentId): void
     {
-        $this->pdo->beginTransaction();
+        $statement = $this->pdo->prepare(
+            'UPDATE tbl_sales
+             SET trobex = b\'1\'
+             WHERE id = :id'
+        );
 
-        try {
-            $salesStatement = $this->pdo->prepare(
-                'UPDATE tbl_sales
-                 SET trobex = b\'1\'
-                 WHERE id = :id'
-            );
-
-            $salesStatement->execute([
-                'id' => $paymentId,
-            ]);
-
-            if ($customerTableId !== null) {
-                $customerStatement = $this->pdo->prepare(
-                    'UPDATE tbl_customers
-                     SET active = b\'0\'
-                     WHERE id = :id'
-                );
-
-                $customerStatement->execute([
-                    'id' => $customerTableId,
-                ]);
-            }
-
-            $this->pdo->commit();
-        } catch (\Throwable $exception) {
-            $this->pdo->rollBack();
-
-            throw $exception;
-        }
+        $statement->execute([
+            'id' => $paymentId,
+        ]);
     }
 }

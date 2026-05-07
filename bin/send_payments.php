@@ -75,7 +75,7 @@ foreach ($unsentPayments as $payment) {
 
         json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
 
-        $payments->markPostedToBookingLayer($payment['id'], (int) $payment['customer_table_id']);
+        $payments->markPostedToBookingLayer((int) $payment['id']);
         $sent++;
 
         fwrite(STDOUT, sprintf(

@@ -46,6 +46,7 @@ try {
 
     $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
     $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
+    $deactivated     = $reservations->deactivateCheckedOutCustomers($bookings);
     $bookings        = $reservations->filterActiveGuests($bookings);
 
     // Step 2: for each booking fetch booking_lines to get product names
@@ -76,9 +77,10 @@ try {
     $latestPulledAt = $reservations->latestPulledAt() ?? date('Y-m-d H:i:s');
 
     fwrite(STDOUT, sprintf(
-        "[%s] Synced %d reservation(s). Latest row update: %s\n",
+        "[%s] Synced %d active reservation(s). Deactivated %d checked-out customer(s). Latest row update: %s\n",
         date('Y-m-d H:i:s'),
         $synced,
+        $deactivated,
         $latestPulledAt
     ));
 } catch (\Throwable $exception) {

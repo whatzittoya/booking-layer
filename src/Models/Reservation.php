@@ -123,6 +123,32 @@ class Reservation
         return array_values(array_filter($reservations, fn($reservation) => $this->isActiveGuestReservation($reservation)));
     }
 
+    public function deactivateCheckedOutCustomers(array $reservations): int
+    {
+        $reservationIds = array_values(array_unique(array_filter(array_map(
+            fn($reservation) => $this->isCheckedOutReservation($reservation)
+                ? (string) ($reservation['id'] ?? '')
+                : '',
+            $reservations,
+        ))));
+
+        if ($reservationIds === []) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($reservationIds), '?'));
+        $statement = $this->pdo->prepare(
+            "UPDATE tbl_customers
+             SET active = b'0'
+             WHERE reservation_id IN ($placeholders)
+               AND CAST(active AS UNSIGNED) = 1"
+        );
+
+        $statement->execute($reservationIds);
+
+        return $statement->rowCount();
+    }
+
     /**
      * Each item in $reservations must be a raw Booking Layer booking object
      * with an optional '_products' key (array of backoffice_title strings)
@@ -268,6 +294,19 @@ class Reservation
             in_array($checkInStatus, $checkedInStatuses, true)
             || in_array($webCheckInStatus, $checkedInStatuses, true)
         ) && in_array($checkOutStatus, $checkedOutStatuses, true);
+    }
+
+    private function isCheckedOutReservation(mixed $reservation): bool
+    {
+        if (!is_array($reservation)) {
+            return false;
+        }
+
+        return in_array(
+            $this->normalizeStatus($reservation['check_out_status'] ?? null),
+            ['everybody', 'every body'],
+            true
+        );
     }
 
     private function normalizeStatus(mixed $status): ?string

@@ -45,8 +45,8 @@ class SchedulerService
 
         $batPath = $this->ensureBatFile();
         $args    = $this->scheduleToSchtasksArgs($schedule);
-        $cmd     = sprintf(
-            'schtasks /create /tn %s /tr %s /sc %s%s%s /ru SYSTEM /f 2>&1',
+        $baseCmd = sprintf(
+            'schtasks /create /tn %s /tr %s /sc %s%s%s',
             escapeshellarg($this->taskName),
             escapeshellarg($batPath),
             $args['sc'],
@@ -54,11 +54,21 @@ class SchedulerService
             isset($args['st']) ? ' /st ' . $args['st'] : '',
         );
 
-        exec($cmd, $outputLines, $exitCode);
+        exec($baseCmd . ' /ru SYSTEM /f 2>&1', $outputLines, $exitCode);
         $output = implode("\n", $outputLines);
 
         if ($exitCode !== 0) {
-            throw new \RuntimeException('schtasks /create failed: ' . trim($output));
+            if (!str_contains(strtolower($output), 'access is denied')) {
+                throw new \RuntimeException('schtasks /create failed: ' . trim($output));
+            }
+
+            $outputLines = [];
+            exec($baseCmd . ' /f 2>&1', $outputLines, $exitCode);
+            $output = implode("\n", $outputLines);
+
+            if ($exitCode !== 0) {
+                throw new \RuntimeException('schtasks /create failed: ' . trim($output));
+            }
         }
 
         $this->saveState($schedule);

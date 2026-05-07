@@ -181,10 +181,7 @@ class PaymentController
 
             $payload = json_decode((string) $apiResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
 
-            $this->payments->markPostedToBookingLayer(
-                $paymentId,
-                isset($payment['customer_table_id']) ? (int) $payment['customer_table_id'] : null
-            );
+            $this->payments->markPostedToBookingLayer($paymentId);
 
             return $this->json($response, [
                 'success' => true,
