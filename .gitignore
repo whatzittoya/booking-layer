@@ -5,3 +5,4 @@
 /var/logs/*
 /skills/*
 
+/var/scheduler/*

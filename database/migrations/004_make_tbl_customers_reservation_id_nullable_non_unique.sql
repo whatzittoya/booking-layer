@@ -10,7 +10,7 @@ SET @reservation_id_is_nullable := (
 SET @make_reservation_id_nullable := IF(
     @reservation_id_is_nullable = 0,
     'ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(32) NULL',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE make_reservation_id_nullable_statement FROM @make_reservation_id_nullable;
@@ -28,7 +28,7 @@ SET @reservation_id_unique_exists := (
 SET @drop_reservation_id_unique := IF(
     @reservation_id_unique_exists = 1,
     'ALTER TABLE `tbl_customers` DROP INDEX `uniq_tbl_customers_reservation_id`',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE drop_reservation_id_unique_statement FROM @drop_reservation_id_unique;

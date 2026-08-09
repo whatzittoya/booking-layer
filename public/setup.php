@@ -175,6 +175,20 @@ function runMigrations(PDO $pdo): array
 
             $pdo->exec("ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(255) NULL");
             $results[] = ['label' => 'Alter tbl_customers.reservation_id → VARCHAR(255)', 'ok' => true, 'note' => 'OK'];
+
+            $billColExists = (int) $pdo->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME   = 'tbl_customers'
+                   AND COLUMN_NAME  = 'bill_id'"
+            )->fetchColumn();
+
+            if ($billColExists === 0) {
+                $pdo->exec("ALTER TABLE `tbl_customers` ADD COLUMN `bill_id` VARCHAR(36) NULL AFTER `reservation_id`");
+                $results[] = ['label' => 'Add tbl_customers.bill_id', 'ok' => true, 'note' => 'OK'];
+            } else {
+                $results[] = ['label' => 'Add tbl_customers.bill_id', 'ok' => true, 'note' => 'Already exists'];
+            }
         }
     } catch (Throwable $e) {
         $results[] = ['label' => 'tbl_customers alterations', 'ok' => false, 'note' => $e->getMessage()];

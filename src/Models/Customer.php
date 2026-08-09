@@ -37,6 +37,10 @@ class Customer
 
         if ($existingId !== null) {
             $statement = $this->pdo->prepare(
+                // bill_id is cleared when this row is reassigned to a different
+                // reservation — the old bill belongs to the previous booking.
+                // Assignments evaluate left to right, so the CASE still sees the
+                // pre-update reservation_id.
                 'UPDATE tbl_customers
                  SET active         = b\'1\',
                      code           = :code,
@@ -45,13 +49,20 @@ class Customer
                      address        = :address,
                      postcode       = :postcode,
                      suburb         = :suburb,
+                     bill_id        = CASE
+                                          WHEN reservation_id = :reservation_id_check THEN bill_id
+                                          ELSE NULL
+                                      END,
                      reservation_id = :reservation_id,
                      created        = :created,
                      expired        = :expired
                  WHERE id = :id'
             );
 
-            $statement->execute($payload + ['id' => $existingId]);
+            $statement->execute($payload + [
+                'id'                   => $existingId,
+                'reservation_id_check' => $reservationId,
+            ]);
 
             return;
         }
@@ -83,6 +94,42 @@ class Customer
         );
 
         $statement->execute($payload);
+    }
+
+    /**
+     * The Booking Layer bill that POS charges for this customer are posted to.
+     * Lives here rather than on tbl_reservation_b_layer because that table is a
+     * mirror of currently-active reservations only — a guest's row disappears at
+     * checkout, while sales closed just before checkout may still be unsent.
+     */
+    public function billId(int $customerId): ?string
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT bill_id
+             FROM tbl_customers
+             WHERE id = :id
+             LIMIT 1'
+        );
+
+        $statement->execute(['id' => $customerId]);
+
+        $billId = (string) ($statement->fetchColumn() ?: '');
+
+        return $billId !== '' ? $billId : null;
+    }
+
+    public function saveBillId(int $customerId, string $billId): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE tbl_customers
+             SET bill_id = :bill_id
+             WHERE id = :id'
+        );
+
+        $statement->execute([
+            'bill_id' => $billId,
+            'id'      => $customerId,
+        ]);
     }
 
     private function findExistingIdByReservationId(string $reservationId): ?int

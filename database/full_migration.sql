@@ -19,7 +19,7 @@ SET @access_token_item_id_exists := (
 SET @add_access_token_item_id := IF(
     @access_token_item_id_exists = 0,
     'ALTER TABLE `access_token` ADD COLUMN `item_id` VARCHAR(32) NULL AFTER `api_key`',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE add_access_token_item_id_statement FROM @add_access_token_item_id;
@@ -38,7 +38,7 @@ SET @customer_reservation_id_exists := (
 SET @add_customer_reservation_id := IF(
     @customer_reservation_id_exists = 0,
     'ALTER TABLE `tbl_customers` ADD COLUMN `reservation_id` VARCHAR(255) NULL AFTER `refunded`',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE add_customer_reservation_id_statement FROM @add_customer_reservation_id;
@@ -57,7 +57,7 @@ SET @customer_reservation_id_nullable := (
 SET @make_customer_reservation_id_nullable := IF(
     @customer_reservation_id_nullable = 0,
     'ALTER TABLE `tbl_customers` MODIFY COLUMN `reservation_id` VARCHAR(255) NULL',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE make_customer_reservation_id_nullable_statement FROM @make_customer_reservation_id_nullable;
@@ -75,12 +75,30 @@ SET @customer_reservation_id_unique_exists := (
 SET @drop_customer_reservation_id_unique := IF(
     @customer_reservation_id_unique_exists = 1,
     'ALTER TABLE `tbl_customers` DROP INDEX `uniq_tbl_customers_reservation_id`',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE drop_customer_reservation_id_unique_statement FROM @drop_customer_reservation_id_unique;
 EXECUTE drop_customer_reservation_id_unique_statement;
 DEALLOCATE PREPARE drop_customer_reservation_id_unique_statement;
+
+SET @customer_bill_id_exists := (
+    SELECT COUNT(*)
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'tbl_customers'
+      AND COLUMN_NAME = 'bill_id'
+);
+
+SET @add_customer_bill_id := IF(
+    @customer_bill_id_exists = 0,
+    'ALTER TABLE `tbl_customers` ADD COLUMN `bill_id` VARCHAR(36) NULL AFTER `reservation_id`',
+    'DO 0'
+);
+
+PREPARE add_customer_bill_id_statement FROM @add_customer_bill_id;
+EXECUTE add_customer_bill_id_statement;
+DEALLOCATE PREPARE add_customer_bill_id_statement;
 
 CREATE TABLE IF NOT EXISTS `tbl_reservation_b_layer` (
     `id` VARCHAR(36) NOT NULL,

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 use App\Models\AccessToken;
 use App\Models\Reservation;
+use App\Services\BookingLayerReservations;
 use Dotenv\Dotenv;
-use GuzzleHttp\Client;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -16,14 +16,13 @@ if (file_exists($rootPath . '/.env')) {
 }
 
 $container = require $rootPath . '/config/container.php';
-$settings = $container->get('settings');
 
 /** @var AccessToken $accessTokens */
 $accessTokens = $container->get(AccessToken::class);
 /** @var Reservation $reservations */
 $reservations = $container->get(Reservation::class);
-/** @var Client $client */
-$client = $container->get(Client::class);
+/** @var BookingLayerReservations $pull */
+$pull = $container->get(BookingLayerReservations::class);
 
 $accessToken = $accessTokens->latest();
 
@@ -33,54 +32,17 @@ if ($accessToken === null) {
 }
 
 try {
-    $bookinglayer = $settings['bookinglayer'];
-    $baseUrl      = rtrim($bookinglayer['base_url'], '/');
-    $authHeader   = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
-
-    // Step 1: fetch confirmed bookings with guests expanded
-    $bookingsResponse = $client->request('GET', $baseUrl . '/bookings?expand[]=guests&expand[]=booker', [
-        'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-        'json'    => ['status' => $bookinglayer['reservation_status']],
-        'timeout' => 30,
-    ]);
-
-    $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-    $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
-    $deactivated     = $reservations->deactivateCheckedOutCustomers($bookings);
-    $bookings        = $reservations->filterActiveGuests($bookings);
-
-    // Step 2: for each booking fetch booking_lines to get product names
-    foreach ($bookings as &$booking) {
-        $bookingId = (string) ($booking['id'] ?? '');
-
-        if ($bookingId === '') {
-            $booking['_products'] = [];
-            continue;
-        }
-
-        $linesResponse = $client->request('GET', $baseUrl . '/booking_lines?expand[]=product', [
-            'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-            'json'    => ['booking_id' => $bookingId],
-            'timeout' => 30,
-        ]);
-
-        $linesPayload         = json_decode((string) $linesResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-        $lines                = is_array($linesPayload['data'] ?? null) ? $linesPayload['data'] : [];
-        $booking['_products'] = array_values(array_filter(array_map(
-            fn($line) => (string) ($line['product']['backoffice_title'] ?? ''),
-            $lines,
-        )));
-    }
-    unset($booking);
-
-    $synced         = $reservations->upsertMany($bookings);
+    $result         = $pull->pull((string) $accessToken['api_key']);
     $latestPulledAt = $reservations->latestPulledAt() ?? date('Y-m-d H:i:s');
 
     fwrite(STDOUT, sprintf(
-        "[%s] Synced %d active reservation(s). Deactivated %d checked-out customer(s). Latest row update: %s\n",
+        "[%s] Fetched %d booking(s) across %d page(s); %d active. Synced %d. Deactivated %d checked-out customer(s). Latest row update: %s\n",
         date('Y-m-d H:i:s'),
-        $synced,
-        $deactivated,
+        $result['fetched'],
+        $result['pages'],
+        $result['active'],
+        $result['synced'],
+        $result['deactivated'],
         $latestPulledAt
     ));
 } catch (\Throwable $exception) {

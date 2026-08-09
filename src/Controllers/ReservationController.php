@@ -7,8 +7,8 @@ namespace App\Controllers;
 use App\Models\AccessToken;
 use App\Models\Customer;
 use App\Models\Reservation;
+use App\Services\BookingLayerReservations;
 use App\Services\SchedulerService;
-use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Flash\Messages;
@@ -22,7 +22,7 @@ class ReservationController
         private readonly AccessToken $accessTokens,
         private readonly Customer $customers,
         private readonly Reservation $reservations,
-        private readonly Client $client,
+        private readonly BookingLayerReservations $pullService,
         private readonly SchedulerService $scheduler,
         private readonly array $settings
     ) {}
@@ -192,7 +192,6 @@ class ReservationController
             return $this->redirect($response, '/login');
         }
 
-        $bookinglayer = $this->settings['bookinglayer'];
         $accessToken = $this->accessTokens->latest();
 
         if ($accessToken === null) {
@@ -211,58 +210,22 @@ class ReservationController
         }
 
         try {
-            $authHeader = ['Authorization' => 'Bearer ' . $accessToken['api_key']];
-            $baseUrl    = rtrim($bookinglayer['base_url'], '/');
-
-            // Step 1: fetch confirmed bookings with guests expanded
-            $bookingsResponse = $this->client->request('GET', $baseUrl . '/bookings?expand[]=guests&expand[]=booker', [
-                'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-                'json'    => ['status' => $bookinglayer['reservation_status']],
-                'timeout' => 30,
-            ]);
-
-            $bookingsPayload = json_decode((string) $bookingsResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-            $bookings        = is_array($bookingsPayload['data'] ?? null) ? $bookingsPayload['data'] : [];
-            $deactivated     = $this->reservations->deactivateCheckedOutCustomers($bookings);
-            $bookings        = $this->reservations->filterActiveGuests($bookings);
-
-            // Step 2: for each booking fetch booking_lines to get product names
-            foreach ($bookings as &$booking) {
-                $bookingId = (string) ($booking['id'] ?? '');
-
-                if ($bookingId === '') {
-                    $booking['_products'] = [];
-                    continue;
-                }
-
-                $linesResponse = $this->client->request('GET', $baseUrl . '/booking_lines?expand[]=product', [
-                    'headers' => array_merge($authHeader, ['Content-Type' => 'application/json']),
-                    'json'    => ['booking_id' => $bookingId],
-                    'timeout' => 30,
-                ]);
-
-                $linesPayload       = json_decode((string) $linesResponse->getBody(), true, 512, JSON_THROW_ON_ERROR);
-                $lines              = is_array($linesPayload['data'] ?? null) ? $linesPayload['data'] : [];
-                $booking['_products'] = array_values(array_filter(array_map(
-                    fn($line) => (string) ($line['product']['backoffice_title'] ?? ''),
-                    $lines,
-                )));
-            }
-            unset($booking);
-
-            $synced  = $this->reservations->upsertMany($bookings);
+            $result  = $this->pullService->pull((string) $accessToken['api_key']);
             $message = sprintf(
-                'Synced %d active reservation(s) from Booking Layer. Deactivated %d checked-out customer(s).',
-                $synced,
-                $deactivated
+                'Synced %d active reservation(s) from %d booking(s) across %d page(s). Deactivated %d checked-out customer(s).',
+                $result['synced'],
+                $result['fetched'],
+                $result['pages'],
+                $result['deactivated']
             );
 
             if ($this->expectsJson($request)) {
                 return $this->json($response, [
                     'success'     => true,
                     'message'     => $message,
-                    'synced'      => $synced,
-                    'deactivated' => $deactivated,
+                    'synced'      => $result['synced'],
+                    'fetched'     => $result['fetched'],
+                    'deactivated' => $result['deactivated'],
                 ]);
             }
 

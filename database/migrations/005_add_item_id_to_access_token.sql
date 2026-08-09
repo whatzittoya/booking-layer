@@ -9,7 +9,7 @@ SET @item_id_column_exists := (
 SET @add_item_id_column := IF(
     @item_id_column_exists = 0,
     'ALTER TABLE `access_token` ADD COLUMN `item_id` VARCHAR(32) NULL AFTER `api_key`',
-    'SELECT 1'
+    'DO 0'
 );
 
 PREPARE add_item_id_column_statement FROM @add_item_id_column;

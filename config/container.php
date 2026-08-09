@@ -10,6 +10,8 @@ use App\Models\Customer;
 use App\Models\Employee;
 use App\Models\Payment;
 use App\Models\Reservation;
+use App\Services\BookingLayerBills;
+use App\Services\BookingLayerReservations;
 use App\Services\SchedulerService;
 use DI\ContainerBuilder;
 use GuzzleHttp\Client;
@@ -35,12 +37,13 @@ $builder->addDefinitions([
             'port' => $_ENV['DB_PORT'] ?? '3306',
             'database' => $_ENV['DB_DATABASE'] ?? 'db_arna',
             'username' => $_ENV['DB_USERNAME'] ?? 'root',
-            'password' => $_ENV['DB_PASSWORD'] ?? '',
+            'password' => $_ENV['DB_PASSWORD'] ?? 'Mysql123.',
             'charset' => $_ENV['DB_CHARSET'] ?? 'utf8',
         ],
         'bookinglayer' => [
             'base_url' => rtrim($_ENV['BOOKINGLAYER_BASE_URL'] ?? 'http://api.bookinglayer.io/private', '/'),
             'reservation_status' => $_ENV['BOOKINGLAYER_RESERVATION_STATUS'] ?? 'confirmed',
+            'bill_currency' => $_ENV['BOOKINGLAYER_BILL_CURRENCY'] ?? 'IDR',
         ],
         'paths' => [
             'root' => $rootPath,
@@ -102,6 +105,25 @@ $builder->addDefinitions([
 
         return new SchedulerService($root . '/bin/send_payments.php', $root, 'bookinglayer:send_payments');
     },
+    BookingLayerBills::class => static function (ContainerInterface $container): BookingLayerBills {
+        $bookinglayer = $container->get('settings')['bookinglayer'];
+
+        return new BookingLayerBills(
+            $container->get(Client::class),
+            $bookinglayer['base_url'],
+            $bookinglayer['bill_currency']
+        );
+    },
+    BookingLayerReservations::class => static function (ContainerInterface $container): BookingLayerReservations {
+        $bookinglayer = $container->get('settings')['bookinglayer'];
+
+        return new BookingLayerReservations(
+            $container->get(Client::class),
+            $container->get(Reservation::class),
+            $bookinglayer['base_url'],
+            $bookinglayer['reservation_status']
+        );
+    },
     AccessToken::class => DI\autowire(AccessToken::class),
     Customer::class => DI\autowire(Customer::class),
     Employee::class => DI\autowire(Employee::class),
@@ -115,6 +137,7 @@ $builder->addDefinitions([
         ->constructorParameter('scheduler', DI\get('scheduler.payments'))
         ->constructorParameter('settings', DI\get('settings')),
     ReservationController::class => DI\autowire(ReservationController::class)
+        ->constructorParameter('pullService', DI\get(BookingLayerReservations::class))
         ->constructorParameter('scheduler', DI\get(SchedulerService::class))
         ->constructorParameter('settings', DI\get('settings')),
 ]);

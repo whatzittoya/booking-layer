@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\AccessToken;
+use App\Models\Customer;
 use App\Models\Payment;
+use App\Services\BookingLayerBills;
 use Dotenv\Dotenv;
 use GuzzleHttp\Client;
 
@@ -22,6 +24,10 @@ $settings  = $container->get('settings');
 $accessTokens = $container->get(AccessToken::class);
 /** @var Payment $payments */
 $payments = $container->get(Payment::class);
+/** @var Customer $customers */
+$customers = $container->get(Customer::class);
+/** @var BookingLayerBills $bills */
+$bills = $container->get(BookingLayerBills::class);
 /** @var Client $client */
 $client = $container->get(Client::class);
 
@@ -45,15 +51,37 @@ $failed  = 0;
 
 foreach ($unsentPayments as $payment) {
     try {
-        $bookingId = $payment['reservation_id'];
-        $subtotal  = (float) ($payment['subtotal'] ?? 0);
-        $amount    = (float) ($payment['amount'] ?? 0);
-        $svcCharge = (float) ($payment['servicechargeamount'] ?? 0);
-        $taxRate   = $subtotal > 0 ? round(($svcCharge / $subtotal) * 100, 2) : 0;
+        $customerId = (int) ($payment['customer_table_id'] ?? 0);
+        $bookingId  = (string) ($payment['reservation_id'] ?? '');
+
+        if ($customerId === 0 || $bookingId === '') {
+            throw new RuntimeException('Payment is not linked to a customer with a reservation.');
+        }
+
+        // Amendments carry no currency, so POS charges go to a bill created in
+        // the POS currency. One bill per customer, reused across checks.
+        $billId = $customers->billId($customerId);
+
+        if ($billId === null) {
+            $billId = $bills->create($bookingId, (string) $accessToken['api_key']);
+            $customers->saveBillId($customerId, $billId);
+
+            fwrite(STDOUT, sprintf(
+                "[%s] Created %s bill %s for booking %s.\n",
+                date('Y-m-d H:i:s'),
+                $bills->currency(),
+                $billId,
+                $bookingId
+            ));
+        }
+
+        // The POS total already includes service charge and tax, so it is posted
+        // as a flat amount with no tax broken out. See PaymentController::send().
+        $amount = (float) ($payment['amount'] ?? 0);
 
         $apiResponse = $client->request(
             'POST',
-            $baseUrl . '/bookings/' . $bookingId . '/amendments',
+            $baseUrl . '/bookings/' . $billId . '/amendments',
             [
                 'headers' => [
                     'Content-Type'  => 'application/json',
@@ -64,10 +92,8 @@ foreach ($unsentPayments as $payment) {
                     'backoffice_title'     => 'Quinos - ' . $payment['id'],
                     'category'             => 'fee',
                     'qty'                  => 1,
-                    'unit_price_excl_tax'  => $subtotal,
-                    'unit_price_incl_tax'  => $amount,
-                    'tax_rate'             => $taxRate,
                     'total_price_incl_tax' => $amount,
+                    'tax_rate'             => 0,
                 ],
                 'timeout' => 30,
             ]

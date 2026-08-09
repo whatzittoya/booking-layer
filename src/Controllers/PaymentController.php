@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\AccessToken;
+use App\Models\Customer;
 use App\Models\Payment;
+use App\Services\BookingLayerBills;
 use App\Services\SchedulerService;
 use GuzzleHttp\Client;
 use Psr\Http\Message\ResponseInterface;
@@ -19,6 +21,8 @@ class PaymentController
         private readonly AccessToken $accessTokens,
         private readonly Client $client,
         private readonly Payment $payments,
+        private readonly Customer $customers,
+        private readonly BookingLayerBills $bills,
         private readonly SchedulerService $scheduler,
         private readonly array $settings
     ) {
@@ -140,6 +144,15 @@ class PaymentController
             ], 404);
         }
 
+        // The list query hides sent payments, but a stale page could still post
+        // one twice — and this endpoint writes to a guest's bill.
+        if ((int) ($payment['trobex'] ?? 0) === 1) {
+            return $this->json($response, [
+                'success' => false,
+                'message' => 'Payment was already sent to Booking Layer.',
+            ], 409);
+        }
+
         $accessToken = $this->accessTokens->latest();
 
         if ($accessToken === null) {
@@ -149,17 +162,40 @@ class PaymentController
             ], 422);
         }
 
+        $customerId = (int) ($payment['customer_table_id'] ?? 0);
+        $bookingId  = (string) ($payment['reservation_id'] ?? '');
+
+        if ($customerId === 0 || $bookingId === '') {
+            return $this->json($response, [
+                'success' => false,
+                'message' => 'Payment is not linked to a customer with a reservation.',
+            ], 422);
+        }
+
         try {
             $baseUrl  = rtrim($this->settings['bookinglayer']['base_url'], '/');
-            $bookingId = $payment['reservation_id'];
-            $subtotal  = (float) ($payment['subtotal'] ?? 0);
-            $amount    = (float) ($payment['amount'] ?? 0);
-            $svcCharge = (float) ($payment['servicechargeamount'] ?? 0);
-            $taxRate   = $subtotal > 0 ? round(($svcCharge / $subtotal) * 100, 2) : 0;
+
+            // Amendments carry no currency, so POS charges go to a bill created
+            // in the POS currency. One bill per customer, reused across checks.
+            $billId = $this->customers->billId($customerId);
+
+            if ($billId === null) {
+                $billId = $this->bills->create($bookingId, (string) $accessToken['api_key']);
+                $this->customers->saveBillId($customerId, $billId);
+            }
+
+            // The POS total already includes service charge and tax, so it is
+            // posted as a flat amount with no tax broken out. Sending only
+            // total_price_incl_tax is deliberate: the spec accepts one of the
+            // three price fields, and at qty 1 this one fully determines the
+            // charge. subtotal + servicechargeamount does NOT equal amount here
+            // (the POS stacks service charge and tax), so deriving a tax_rate
+            // from them understates the charge by roughly 9%.
+            $amount = (float) ($payment['amount'] ?? 0);
 
             $apiResponse = $this->client->request(
                 'POST',
-                $baseUrl . '/bookings/' . $bookingId . '/amendments',
+                $baseUrl . '/bookings/' . $billId . '/amendments',
                 [
                     'headers' => [
                         'Content-Type'  => 'application/json',
@@ -167,13 +203,11 @@ class PaymentController
                         'Authorization' => 'Bearer ' . $accessToken['api_key'],
                     ],
                     'json' => [
-                        'backoffice_title'      => 'Quinos - ' . $payment['id'],
-                        'category'              => 'fee',
-                        'qty'                   => 1,
-                        'unit_price_excl_tax'   => $subtotal,
-                        'unit_price_incl_tax'   => $amount,
-                        'tax_rate'              => $taxRate,
-                        'total_price_incl_tax'  => $amount,
+                        'backoffice_title'     => 'Quinos - ' . $payment['id'],
+                        'category'             => 'fee',
+                        'qty'                  => 1,
+                        'total_price_incl_tax' => $amount,
+                        'tax_rate'             => 0,
                     ],
                     'timeout' => 30,
                 ]
