@@ -241,8 +241,8 @@ class Reservation
                 $statement->execute([
                     'id'                   => (string) ($reservation['id'] ?? ''),
                     'reference'            => (string) ($reservation['reference'] ?? ''),
-                    'starts_at'            => (string) ($reservation['starts_at'] ?? ''),
-                    'ends_at'              => (string) ($reservation['ends_at'] ?? ''),
+                    'starts_at'            => self::nullableDateTime($reservation['starts_at'] ?? null),
+                    'ends_at'              => self::nullableDateTime($reservation['ends_at'] ?? null),
                     'status'               => (string) ($reservation['status'] ?? ''),
                     'booker_id'            => (string) ($reservation['booker_id'] ?? ''),
                     'guest'                => $guestName,
@@ -275,6 +275,22 @@ class Reservation
         }
 
         return count($reservations);
+    }
+
+    /**
+     * Booking Layer allows dateless bookings, which arrive with a null
+     * starts_at/ends_at. Casting those to '' makes MySQL reject the row under
+     * STRICT_TRANS_TABLES and aborts the whole pull, so keep them null.
+     */
+    public static function nullableDateTime(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
     }
 
     private function isActiveGuestReservation(mixed $reservation): bool

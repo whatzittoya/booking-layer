@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS `tbl_reservation_b_layer` (
     `id` VARCHAR(36) NOT NULL,
     `reference` VARCHAR(50) NOT NULL DEFAULT '',
-    `starts_at` DATETIME NOT NULL,
-    `ends_at` DATETIME NOT NULL,
+    `starts_at` DATETIME NULL     DEFAULT NULL,
+    `ends_at` DATETIME NULL     DEFAULT NULL,
     `status` VARCHAR(50) NOT NULL DEFAULT '',
     `booker_id` VARCHAR(36) NOT NULL DEFAULT '',
     `guest` VARCHAR(255) NOT NULL DEFAULT '',

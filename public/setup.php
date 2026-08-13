@@ -85,8 +85,8 @@ function runMigrations(PDO $pdo): array
             CREATE TABLE IF NOT EXISTS `tbl_reservation_b_layer` (
                 `id`                    VARCHAR(36) NOT NULL,
                 `reference`             VARCHAR(50)    NOT NULL DEFAULT '',
-                `starts_at`             DATETIME       NOT NULL,
-                `ends_at`               DATETIME       NOT NULL,
+                `starts_at`             DATETIME       NULL     DEFAULT NULL,
+                `ends_at`               DATETIME       NULL     DEFAULT NULL,
                 `status`                VARCHAR(50)    NOT NULL DEFAULT '',
                 `booker_id`             VARCHAR(36)    NOT NULL DEFAULT '',
                 `guest`                 VARCHAR(255)   NOT NULL DEFAULT '',
@@ -116,6 +116,31 @@ function runMigrations(PDO $pdo): array
             $results[] = ['label' => $label, 'ok' => true, 'note' => 'OK'];
         } catch (Throwable $e) {
             $results[] = ['label' => $label, 'ok' => false, 'note' => $e->getMessage()];
+        }
+    }
+
+    // Booking Layer allows dateless bookings; a NOT NULL DATETIME rejects them
+    // in strict mode and fails the whole pull.
+    foreach (['starts_at', 'ends_at'] as $dateColumn) {
+        try {
+            $nullable = $pdo->query(
+                "SELECT IS_NULLABLE FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME   = 'tbl_reservation_b_layer'
+                   AND COLUMN_NAME  = '{$dateColumn}'"
+            )->fetchColumn();
+
+            if ($nullable === 'NO') {
+                $pdo->exec(
+                    "ALTER TABLE `tbl_reservation_b_layer`
+                     MODIFY COLUMN `{$dateColumn}` DATETIME NULL DEFAULT NULL"
+                );
+                $results[] = ['label' => "Alter tbl_reservation_b_layer.{$dateColumn} → NULL", 'ok' => true, 'note' => 'OK'];
+            } else {
+                $results[] = ['label' => "Alter tbl_reservation_b_layer.{$dateColumn} → NULL", 'ok' => true, 'note' => 'Already nullable'];
+            }
+        } catch (Throwable $e) {
+            $results[] = ['label' => "Alter tbl_reservation_b_layer.{$dateColumn} → NULL", 'ok' => false, 'note' => $e->getMessage()];
         }
     }
 

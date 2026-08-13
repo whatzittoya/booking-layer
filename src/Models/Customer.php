@@ -31,8 +31,10 @@ class Customer
                 ? (string) $reservation['product']
                 : null,
             'reservation_id' => $reservationId,
-            'created'        => (string) ($reservation['starts_at'] ?? ''),
-            'expired'        => (string) ($reservation['ends_at'] ?? ''),
+            // Null rather than '' — tbl_customers.created/expired are DATE
+            // columns and a dateless booking would be rejected in strict mode.
+            'created'        => Reservation::nullableDateTime($reservation['starts_at'] ?? null),
+            'expired'        => Reservation::nullableDateTime($reservation['ends_at'] ?? null),
         ];
 
         if ($existingId !== null) {
