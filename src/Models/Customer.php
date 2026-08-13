@@ -19,16 +19,26 @@ class Customer
 
         $existingId = $this->findExistingIdByBookerId($bookerId, $reservationId)
             ?? $this->findExistingIdByReservationId($reservationId);
+
+        // A name written entirely in a non-latin1 script folds away to nothing,
+        // which would leave POS staff with a blank row they cannot match to a
+        // guest. Fall back to the booking reference, which is always printable.
         $customerName = (string) ($reservation['guest'] ?? '');
+        $foldedName   = (string) self::latin1Safe($customerName);
+
+        if (trim($foldedName) === '' && trim($customerName) !== '') {
+            $reference  = trim((string) ($reservation['reference'] ?? ''));
+            $foldedName = $reference !== '' ? 'Guest ' . $reference : 'Guest';
+        }
 
         $payload = [
-            'code'           => $customerName,
-            'name'           => $customerName,
-            'notes'          => $bookerId,
+            'code'           => $foldedName,
+            'name'           => $foldedName,
+            'notes'          => self::latin1Safe($bookerId),
             'address'        => null,
             'postcode'       => null,
             'suburb'         => ($reservation['product'] ?? '') !== ''
-                ? (string) $reservation['product']
+                ? self::latin1Safe((string) $reservation['product'])
                 : null,
             'reservation_id' => $reservationId,
             // Null rather than '' — tbl_customers.created/expired are DATE
@@ -96,6 +106,49 @@ class Customer
         );
 
         $statement->execute($payload);
+    }
+
+    /**
+     * tbl_customers is a latin1 table owned by the POS, so a value MySQL cannot
+     * represent there aborts the insert:
+     *
+     *   1366 Incorrect string value: '\xE2\x86\x92 Le...' for column 'suburb'
+     *
+     * Booking Layer product titles and guest names routinely carry characters
+     * outside latin1 — "Boat Transfer - Serangan → Lembongan" is one. Widening
+     * the column instead would let values in that the POS itself cannot read
+     * back over a latin1 connection, so fold them down here rather than there.
+     *
+     * MySQL's latin1 is really cp1252, which does cover the en dash, but there
+     * is no reason to rely on that distinction.
+     */
+    private static function latin1Safe(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        // Characters with a sensible ASCII reading, spelled out rather than
+        // left to iconv, whose //TRANSLIT output varies between platforms.
+        $value = strtr($value, [
+            '→' => '->',  '←' => '<-',  '↔' => '<->', '⇒' => '=>',
+            '–' => '-',   '—' => '-',   '−' => '-',   '‐' => '-',
+            '“' => '"',   '”' => '"',   '„' => '"',   '‘' => "'",
+            '’' => "'",   '‚' => "'",   '…' => '...', '•' => '*',
+            '·' => '-',   '×' => 'x',   '÷' => '/',   '™' => 'TM',
+            '½' => '1/2', '¼' => '1/4', '¾' => '3/4', '°' => ' deg',
+        ]);
+
+        // Anything still outside latin1 (e.g. non-Latin guest names) is
+        // transliterated where possible and dropped where not.
+        $folded = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT//IGNORE', $value);
+
+        if ($folded !== false) {
+            $value = (string) iconv('ISO-8859-1', 'UTF-8', $folded);
+        }
+
+        // Belt and braces: iconv on some builds passes characters through.
+        return preg_replace('/[^\x{0000}-\x{00FF}]/u', '', $value) ?? $value;
     }
 
     /**
